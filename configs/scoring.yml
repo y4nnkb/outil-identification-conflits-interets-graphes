@@ -1,0 +1,27 @@
+attributes:
+  iban: 10
+  siren: 9
+  email: 8
+  address: 7
+  phone: 6
+  name: 5
+patterns:
+  direct_link: 2
+  identity_match: 2
+  ghost_supplier: 5
+  shell_entity: 6
+  bribes_gifts: 6
+  multiple_hidden_links: 5
+  internal_network: 5
+  star_pattern: 4
+  circular_network: 5
+  financial_concentration: 4
+  double_match: 3
+depth_penalty:
+  1: 0
+  2: -1
+  3: -2
+  4: -3
+severity:
+  high: 12
+  medium: 7

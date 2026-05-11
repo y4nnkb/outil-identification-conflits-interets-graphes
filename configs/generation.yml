@@ -1,0 +1,56 @@
+seed: 42
+output_dir: data/generated
+
+date_range:
+  start: "2024-01-01"
+  end: "2026-12-31"
+
+volumes:
+  employes: 200
+  fournisseurs: 500
+  transactions: 3000
+
+amounts:
+  min: 100
+  max: 250000
+  ghost_invoice_max: 2500
+
+scenario_mix:
+  direct_link:
+    percent: 4
+    count:
+  identity_match:
+    percent: 5
+    count:
+  ghost_supplier:
+    percent: 2
+    count:
+  shell_entity:
+    percent: 1
+    count:
+  bribes_gifts:
+    percent: 2
+    count:
+  multiple_hidden_links:
+    percent: 2
+    count:
+  internal_network:
+    percent: 1
+    count:
+  star_pattern:
+    percent: 1
+    count:
+  circular_network:
+    percent: 1
+    count:
+  financial_concentration:
+    percent: 3
+    count:
+  double_match:
+    percent: 2
+    count:
+
+noise:
+  duplicate_rate_percent: 1
+  missing_value_rate_percent: 2
+  typo_rate_percent: 1
