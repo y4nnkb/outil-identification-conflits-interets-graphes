@@ -14,6 +14,44 @@ amounts:
   min: 100
   max: 250000
   ghost_invoice_max: 2500
+  gift_min: 100
+  gift_max: 5000
+
+scenario_parameters:
+  star_supplier_min: 3
+  star_supplier_max: 7
+  star_transactions_per_supplier_min: 1
+  star_transactions_per_supplier_max: 2
+  circular_member_min: 3
+  circular_member_max: 5
+  internal_employee_min: 2
+  internal_employee_max: 4
+  internal_supplier_min: 2
+  internal_supplier_max: 4
+  internal_transaction_min: 4
+  internal_transaction_max: 10
+  shell_transaction_min: 2
+  shell_transaction_max: 5
+  shell_transaction_min_amount: 80000
+  shell_transaction_max_amount: 180000
+  bribe_days_before_transaction_min: 1
+  bribe_days_before_transaction_max: 30
+  hidden_link_min_attributes: 3
+  hidden_link_max_attributes: 4
+  hidden_link_attributes:
+    - adresse
+    - email
+    - telephone
+    - iban
+    - nom
+  financial_concentration_min_amount: 50000
+  financial_concentration_max_amount: 120000
+  double_match_attributes:
+    - adresse
+    - email
+    - telephone
+    - iban
+    - nom
 
 scenario_mix:
   direct_link:

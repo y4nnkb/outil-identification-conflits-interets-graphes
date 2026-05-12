@@ -104,6 +104,24 @@ Les fichiers générés sont créés dans `data/generated/` :
 
 `scenario_labels.csv` sert de fichier de contrôle pour savoir quels scénarios ont été injectés. Il n'est pas destiné à être utilisé comme donnée métier.
 
+## Configuration de la génération
+
+La section `amounts` de `configs/generation.yml` permet de régler :
+
+- `min` et `max` : montants généraux des transactions ;
+- `ghost_invoice_max` : montant maximal des petites transactions associées aux fournisseurs fantômes ;
+- `gift_min` et `gift_max` : fourchette utilisée pour générer les montants de cadeaux ou avantages.
+
+La section `scenario_parameters` permet de régler les paramètres propres aux scénarios :
+
+- taille des motifs en étoile, circulaires et internes ;
+- nombre de transactions associées à certains scénarios ;
+- fourchettes de montants pour les sociétés écrans et la concentration financière ;
+- fenêtre de dates entre un cadeau et le contrat associé ;
+- attributs utilisables pour les liens cachés et les doubles correspondances.
+
+La section `scenario_mix` permet de choisir la proportion ou le nombre exact de scénarios à injecter. Quand `count` est renseigné, il prend le dessus sur `percent`.
+
 ## Données générées
 
 ### Employés
@@ -168,7 +186,7 @@ Le fichier `configs/generation.yml` permet de régler le pourcentage ou le nombr
 - `star_pattern` : un employé relié à plusieurs fournisseurs ;
 - `circular_network` : fournisseurs reliés entre eux par attributs partagés ;
 - `financial_concentration` : plusieurs transactions importantes sur un même couple employé/fournisseur ;
-- `double_match` : double correspondance entre employé et fournisseur.
+- `double_match` : deux attributs partagés entre employé et fournisseur, parcourus parmi toutes les combinaisons possibles d'attributs configurés.
 
 ## Commandes CLI
 
