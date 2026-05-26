@@ -6,7 +6,7 @@ from conflict_detector.reporting.exporters import export_report_bundle
 from conflict_detector.generation.config import GenerationConfig, resolve_scenario_counts
 from conflict_detector.generation.factory import DatasetFactory
 from conflict_detector.generation.scenario_injector import ScenarioInjector
-from conflict_detector.generation.writer import write_dataset, write_manifest
+from conflict_detector.generation.writer import build_manifest, write_dataset, write_manifest
 from conflict_detector.settings import load_generation_config
 
 app = typer.Typer()
@@ -20,7 +20,7 @@ def generate(config: Path = Path("configs/generation.yml")) -> None:
     counts = resolve_scenario_counts(generation_config, generation_config.volumes.transactions)
     ScenarioInjector(generation_config).inject(tables, counts)
     write_dataset(tables, generation_config.output_dir)
-    write_manifest({"seed": generation_config.seed, "scenario_counts": counts}, generation_config.output_dir)
+    write_manifest(build_manifest(generation_config, tables, counts), generation_config.output_dir)
     typer.echo(f"Dataset genere dans {generation_config.output_dir}")
 
 

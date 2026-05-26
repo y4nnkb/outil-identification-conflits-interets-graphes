@@ -43,18 +43,18 @@ class ScenarioInjector:
         handlers[scenario_id](tables)
 
     def inject_direct_link(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule un lien direct entre un employé et un fournisseur, ce qui peut indiquer une relation de collusion ou de favoritisme. L'employé et le fournisseur partagent la même adresse, ce qui est un indicateur fort de lien direct.
-        Entreé : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un employé et un fournisseur modifiés pour partager la même adresse, et une étiquette de scénario ajoutée pour indiquer le scénario de lien direct"""
+        """Simule un lien direct employé-fournisseur via une adresse commune.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec une adresse partagée et un label de scénario."""
         employe = self._row(tables["employes"])
         fournisseur = self._row(tables["fournisseurs"])
-        self._set_address(fournisseur, employe["adresse"]) #Pour l'instant, on considère que l'adresse est un lien plus fort que le téléphone ou l'email, mais on pourrait aussi les faire correspondre
+        self._set_address(fournisseur, employe["adresse"])
         self._tag(tables, ScenarioId.DIRECT_LINK, employe["id_employe"], fournisseur["id_fournisseur"])
 
     def inject_identity_match(self, tables: dict[str, list[dict]]) -> None:
-        """Similaire au scénario Direct Link, mais avec des liens plus faibles (email et téléphone) pour tester la capacité du modèle à détecter des correspondances d'identité moins évidentes
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un employé et un fournisseur modifiés pour partager le même email et téléphone, et une étiquette de scénario ajoutée pour indiquer le scénario de correspondance d'identité"""
+        """Simule une correspondance d'identité via email et téléphone.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec attributs partagés et label de scénario."""
         employe = self._row(tables["employes"])
         fournisseur = self._row(tables["fournisseurs"])
         fournisseur["email"] = employe["email"]
@@ -62,22 +62,28 @@ class ScenarioInjector:
         self._tag(tables, ScenarioId.IDENTITY_MATCH, employe["id_employe"], fournisseur["id_fournisseur"])
 
     def inject_ghost_supplier(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule l'existence d'un fournisseur fictif (ghost supplier) qui n'a pas d'activité réelle mais qui est utilisé pour émettre des factures frauduleuses. Le fournisseur est créé avec une adresse de boîte postale et des transactions associées qui ont des montants élevés, ce qui peut être un indicateur de fraude.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un fournisseur modifié pour être une boîte postale, des transactions associées avec des montants élevés, et une étiquette de scénario ajoutée pour indiquer le scénario de fournisseur fantôme"""
+        """Simule un fournisseur fantôme avec boîte postale et transactions vagues.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec fournisseur marqué, transactions associées et label de scénario."""
         fournisseur = self._row(tables["fournisseurs"])
         fournisseur["is_boite_postale"] = "true"
         fournisseur["adresse"] = f"BP {1000 + self.index}, {self.fake.city()}"
-        for transaction in self._transaction_rows(tables, 3):
+        transactions = self._transaction_rows(tables, self.config.scenario_parameters.ghost_transaction_count)
+        for transaction in transactions:
             transaction["id_fournisseur"] = fournisseur["id_fournisseur"]
             transaction["montant"] = min(float(transaction["montant"]), self.config.amounts.ghost_invoice_max)
             transaction["description"] = "Services divers"
-        self._tag(tables, ScenarioId.GHOST_SUPPLIER, fournisseur["id_fournisseur"])
+        self._tag(
+            tables,
+            ScenarioId.GHOST_SUPPLIER,
+            fournisseur["id_fournisseur"],
+            *(transaction["id_transaction"] for transaction in transactions),
+        )
 
     def inject_shell_entity(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule l'existence d'une entité écran (shell entity) qui est utilisée pour masquer l'identité réelle d'un fournisseur ou d'un employé. L'entité écran est créée avec des informations de bénéficiaire effectif qui correspondent à un employé réel, et des transactions associées avec des montants élevés, ce qui peut être un indicateur de fraude.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un fournisseur modifié pour être une entité écran avec des informations de bénéficiaire effectif correspondant à un employé réel, des transactions associées avec des montants élevés, et une étiquette de scénario ajoutée pour indiquer le scénario d'entité écran"""
+        """Simule une société écran dont le bénéficiaire effectif correspond à un employé.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec fournisseur écran, transactions associées et label de scénario."""
         employe = self._row(tables["employes"])
         fournisseur = self._row(tables["fournisseurs"])
         transaction_count = self.random.randint(
@@ -100,12 +106,12 @@ class ScenarioInjector:
         )
 
     def inject_bribes_gifts(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule des pots-de-vin ou des cadeaux offerts par un fournisseur à un employé en échange de faveurs ou de contrats. L'employé et le fournisseur sont liés par une transaction où le montant du cadeau est enregistré, ainsi que la date du cadeau qui est antérieure à la date de validation de la transaction, ce qui peut être un indicateur de corruption.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un employé et un fournisseur liés par une transaction modifiée pour inclure des informations sur un cadeau ou un pot-de"""
+        """Simule un cadeau ou avantage avant l'attribution d'un contrat.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec cadeau, contrat associé et label de scénario."""
         employe = self._row(tables["employes"])
         fournisseur = self._row(tables["fournisseurs"])
-        transaction = self._transaction_row(tables)
+        transaction = self._transaction_row_by_type(tables, "CONTRAT")
         transaction["id_employe"] = employe["id_employe"]
         transaction["id_fournisseur"] = fournisseur["id_fournisseur"]
         transaction["type_transaction"] = "CONTRAT"
@@ -125,9 +131,9 @@ class ScenarioInjector:
         self._tag(tables, ScenarioId.BRIBES_GIFTS, employe["id_employe"], fournisseur["id_fournisseur"], transaction["id_transaction"])
 
     def inject_multiple_hidden_links(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule une situation où un employé et un fournisseur sont liés par plusieurs liens cachés, tels que l'adresse, le numéro de téléphone ou l'IBAN. Ces liens peuvent être utilisés pour masquer une relation de collusion ou de favoritisme, et peuvent être plus difficiles à détecter que les liens directs.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un employé et un fournisseur modifiés pour partager plusieurs liens cachés (adresse, téléphone, IBAN), et une étiquette de scénario ajoutée pour indiquer le scénario de liens cachés multiples"""
+        """Simule plusieurs liens cachés entre un employé et un fournisseur.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec attributs partagés et label de scénario."""
         employe = self._row(tables["employes"])
         attributes = self._hidden_link_attributes()
         fournisseur = self._rows_without_boite_postale(tables["fournisseurs"], 1)[0] if "adresse" in attributes else self._row(tables["fournisseurs"])
@@ -136,9 +142,9 @@ class ScenarioInjector:
         self._tag(tables, ScenarioId.MULTIPLE_HIDDEN_LINKS, employe["id_employe"], fournisseur["id_fournisseur"], *attributes)
 
     def inject_internal_network(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule un réseau interne d'employés et de fournisseurs qui sont tous liés par une adresse commune, ce qui peut indiquer une collusion ou un favoritisme à grande échelle. Plusieurs employés et fournisseurs partagent la même adresse, et des transactions associées entre eux, ce qui peut être un indicateur de réseau interne.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec plusieurs employés et fournisseurs modifiés pour partager la même adresse, des transactions associées entre eux, et une étiquette de scénario ajoutée pour indiquer le scénario de réseau interne"""
+        """Simule un réseau interne d'employés et fournisseurs liés.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec groupe relié, transactions associées et label de scénario."""
         adresse = self.fake.address().replace("\n", ", ")
         employe_count = self.random.randint(self.config.scenario_parameters.internal_employee_min, self.config.scenario_parameters.internal_employee_max)
         fournisseur_count = self.random.randint(self.config.scenario_parameters.internal_supplier_min, self.config.scenario_parameters.internal_supplier_max)
@@ -164,9 +170,9 @@ class ScenarioInjector:
         )
 
     def inject_star_pattern(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule un schéma en étoile où un employé est lié à plusieurs fournisseurs par une adresse commune, ce qui peut indiquer une collusion ou un favoritisme centralisé. Un employé partage la même adresse avec plusieurs fournisseurs, et des transactions associées entre eux, ce qui peut être un indicateur de schéma en étoile.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un employé modifié pour partager la même adresse avec plusieurs fournisseurs, des transactions associées entre eux, et une étiquette de scénario ajoutée pour indiquer le scénario de schéma en étoile"""
+        """Simule un motif en étoile autour d'un employé pivot.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec fournisseurs reliés, transactions associées et label de scénario."""
         employe = self._row(tables["employes"])
         fournisseur_count = self.random.randint(
             self.config.scenario_parameters.star_supplier_min,
@@ -194,9 +200,9 @@ class ScenarioInjector:
         )
 
     def inject_circular_network(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule un réseau circulaire où plusieurs employés et fournisseurs sont liés entre eux de manière circulaire, ce qui peut indiquer une collusion ou un favoritisme complexe. Trois entités (employés ou fournisseurs) sont liées entre elles de manière circulaire par des liens d'adresse, de téléphone et d'IBAN, ce qui peut être un indicateur de réseau circulaire.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec trois entités (employés ou fournisseurs) modifiées pour être liées entre elles de manière circulaire par des liens d'adresse, de téléphone et d'IBAN, et une étiquette de scénario ajoutée pour"""
+        """Simule un réseau circulaire entre fournisseurs.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec attributs partagés en boucle et label de scénario."""
         member_count = self.random.randint(
             self.config.scenario_parameters.circular_member_min,
             self.config.scenario_parameters.circular_member_max,
@@ -213,9 +219,9 @@ class ScenarioInjector:
         self._tag(tables, ScenarioId.CIRCULAR_NETWORK, *(fournisseur["id_fournisseur"] for fournisseur in fournisseurs))
 
     def inject_financial_concentration(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule une concentration financière où un employé effectue des transactions importantes avec un fournisseur spécifique, ce qui peut indiquer une relation de collusion ou de favoritisme. Un employé est lié à un fournisseur par plusieurs transactions avec des montants élevés, ce qui peut être un indicateur de concentration financière.
-        Entrée : dictionnaire de tables avec des listes d'employés, de fournisseurs et de transactions
-        Sortie : le même dictionnaire de tables, mais avec un employé et un fournisseur liés par plusieurs transactions modifiées pour avoir des montants élevés, et une étiquette de scénario ajoutée pour indiquer le scénario de concentration financière"""
+        """Simule une concentration financière sur un couple employé-fournisseur.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec transactions concentrées et label de scénario."""
         employe = self._row(tables["employes"])
         fournisseur = self._row(tables["fournisseurs"])
         transactions = self._transaction_rows(tables, 8)
@@ -232,9 +238,9 @@ class ScenarioInjector:
         )
 
     def inject_double_match(self, tables: dict[str, list[dict]]) -> None:
-        """Ce scénario simule un double match où un employé et un fournisseur partagent les mêmes informations de contact, ce qui peut indiquer une relation de collusion ou de favoritisme. Un employé est lié à un fournisseur par des informations de contact communes, ce qui peut être un indicateur de double match.
-        Entrée : dictionnaire de tables avec des listes d'employés et de fournisseurs
-        Sortie : le même dictionnaire de tables, mais avec un employé et un fournisseur liés par des informations de contact communes, et une étiquette de scénario ajoutée pour indiquer le scénario de double match"""
+        """Simule deux attributs partagés entre un employé et un fournisseur.
+        Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
+        Sortie : tables modifiées avec deux attributs partagés et label de scénario."""
         employe = self._row(tables["employes"])
         attributes = self._double_match_attributes()
         fournisseur = self._rows_without_boite_postale(tables["fournisseurs"], 1)[0] if "adresse" in attributes else self._row(tables["fournisseurs"])
@@ -272,6 +278,15 @@ class ScenarioInjector:
         self.transaction_index += count
         return transactions[start : start + count]
 
+    def _transaction_row_by_type(self, tables: dict[str, list[dict]], transaction_type: str) -> dict:
+        transactions = tables["transactions"]
+        for offset in range(len(transactions)):
+            index = (self.transaction_index + offset) % len(transactions)
+            if transactions[index]["type_transaction"] == transaction_type:
+                self.transaction_index = index + 1
+                return transactions[index]
+        return self._transaction_row(tables)
+
     def _sort_transactions(self, tables: dict[str, list[dict]]) -> None:
         tables["transactions"].sort(key=lambda transaction: (transaction["date_transaction"], transaction["id_transaction"]))
 
@@ -287,7 +302,7 @@ class ScenarioInjector:
     def _date_before_window(self, reference: str, min_days: int, max_days: int) -> str:
         reference_date = date.fromisoformat(str(reference))
         start_date = date.fromisoformat(self.config.date_range.start)
-        latest_date = reference_date - timedelta(days=max(1, min_days))
+        latest_date = reference_date - timedelta(days=max(0, min_days))
         if latest_date < start_date:
             return str(start_date)
         earliest_date = max(start_date, reference_date - timedelta(days=max(min_days, max_days)))
@@ -298,7 +313,7 @@ class ScenarioInjector:
         validation_date = date.fromisoformat(str(transaction["date_validation"]))
         start_date = date.fromisoformat(self.config.date_range.start)
         end_date = date.fromisoformat(self.config.date_range.end)
-        minimum_transaction_date = start_date + timedelta(days=max(1, min_days))
+        minimum_transaction_date = start_date + timedelta(days=max(0, min_days))
         if transaction_date < minimum_transaction_date:
             transaction_date = min(end_date, minimum_transaction_date)
             transaction["date_transaction"] = str(transaction_date)

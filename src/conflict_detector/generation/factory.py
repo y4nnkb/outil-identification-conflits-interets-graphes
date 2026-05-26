@@ -57,22 +57,27 @@ class DatasetFactory:
 
     def generate_clean_transactions(self, tables: dict[str, list[dict]]) -> dict[str, list[dict]]:
         transactions = []
-        nb_contrats = max(1, self.config.volumes.transactions // 5)
+        nb_contrats = self._contract_count()
         contrats_existants = [f"CTR-{i:05d}" for i in range(1, nb_contrats + 1)]
+        commandes_existantes = []
         for i in range(1, self.config.volumes.transactions + 1):
             transaction_date = self._date()
-            validation_date = self._date()
-            if validation_date < transaction_date:
-                while validation_date < transaction_date:
-                    validation_date = self._date()
+            validation_date = self._validation_date(transaction_date)
             if i <= nb_contrats:
                 type_transaction = "CONTRAT"
                 id_contrat = contrats_existants[i - 1]
                 numero_facture = ""
+                id_commande = ""
             else:
                 type_transaction = self.random.choice(["FACTURE", "COMMANDE"])
                 id_contrat = self.random.choice(contrats_existants)
-                numero_facture = f"FAC-{i:05d}"
+                if type_transaction == "COMMANDE":
+                    id_commande = f"CMD-{i:05d}"
+                    commandes_existantes.append(id_commande)
+                    numero_facture = ""
+                else:
+                    id_commande = self._linked_order_id(commandes_existantes)
+                    numero_facture = f"FAC-{i:05d}"
             transactions.append({
                     "id_transaction": f"TRX{i:05d}",
                     "id_employe": self.random.choice(tables["employes"])["id_employe"],
@@ -85,8 +90,9 @@ class DatasetFactory:
                     "statut": "VALIDEE",
                     "numero_facture": numero_facture,
                     "id_contrat": id_contrat,
+                    "id_commande": id_commande,
                     "date_validation": validation_date,
-                    "mode_paiement": self.random.choices(["VIREMENT", "CARTE", "PRELEVEMENT"], weights=[80, 10, 10])[0],
+                    "mode_paiement": self._payment_method(),
                     "cadeau_ou_avantage": "false",
                     "date_cadeau": "",
                     "montant_cadeau": 0,
@@ -103,6 +109,31 @@ class DatasetFactory:
         start = date.fromisoformat(self.config.date_range.start)
         end = date.fromisoformat(self.config.date_range.end)
         return str(start + timedelta(days=self.random.randint(0, (end - start).days)))
+
+    def _contract_count(self) -> int:
+        count = round(self.config.volumes.transactions * self.config.transaction_parameters.contract_ratio_percent / 100)
+        return min(self.config.volumes.transactions, max(1, count))
+
+    def _validation_date(self, transaction_date: str) -> str:
+        start = date.fromisoformat(transaction_date)
+        end = date.fromisoformat(self.config.date_range.end)
+        min_days = self.config.transaction_parameters.validation_delay_min_days
+        max_days = self.config.transaction_parameters.validation_delay_max_days
+        delay = self.random.randint(min_days, max_days)
+        return str(min(end, start + timedelta(days=delay)))
+
+    def _payment_method(self) -> str:
+        weights = self.config.transaction_parameters.payment_method_weights
+        methods = list(weights.keys())
+        return self.random.choices(methods, weights=[weights[method] for method in methods])[0]
+
+    def _linked_order_id(self, commandes_existantes: list[str]) -> str:
+        if not commandes_existantes:
+            return ""
+        probability = self.config.transaction_parameters.invoice_link_to_order_percent / 100
+        if self.random.random() <= probability:
+            return self.random.choice(commandes_existantes)
+        return ""
 
     def _amount(self) -> float:
         return round(self.random.uniform(self.config.amounts.min, self.config.amounts.max), 2)

@@ -104,6 +104,8 @@ Les fichiers générés sont créés dans `data/generated/` :
 
 `scenario_labels.csv` sert de fichier de contrôle pour savoir quels scénarios ont été injectés. Il n'est pas destiné à être utilisé comme donnée métier.
 
+`generation_manifest.json` conserve les paramètres de génération utilisés, la seed, les volumes demandés, les nombres de lignes générées et les scénarios effectivement injectés.
+
 ## Configuration de la génération
 
 La section `amounts` de `configs/generation.yml` permet de régler :
@@ -111,6 +113,13 @@ La section `amounts` de `configs/generation.yml` permet de régler :
 - `min` et `max` : montants généraux des transactions ;
 - `ghost_invoice_max` : montant maximal des petites transactions associées aux fournisseurs fantômes ;
 - `gift_min` et `gift_max` : fourchette utilisée pour générer les montants de cadeaux ou avantages.
+
+La section `transaction_parameters` permet de régler les paramètres des transactions générées hors scénario :
+
+- proportion de contrats dans le jeu de données ;
+- proportion de factures rattachées à une commande existante ;
+- délai entre la date de transaction et la date de validation ;
+- poids des modes de paiement.
 
 La section `scenario_parameters` permet de régler les paramètres propres aux scénarios :
 
@@ -166,6 +175,7 @@ Chaque transaction contient notamment :
 - un montant ;
 - un type : `CONTRAT`, `FACTURE` ou `COMMANDE` ;
 - un contrat de rattachement ;
+- une commande de rattachement éventuelle pour certaines factures ;
 - une date de validation ;
 - un mode de paiement ;
 - des champs liés aux cadeaux ou avantages.

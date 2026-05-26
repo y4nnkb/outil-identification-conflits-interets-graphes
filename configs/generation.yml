@@ -17,11 +17,22 @@ amounts:
   gift_min: 100
   gift_max: 5000
 
+transaction_parameters:
+  contract_ratio_percent: 20
+  invoice_link_to_order_percent: 50
+  validation_delay_min_days: 0
+  validation_delay_max_days: 7
+  payment_method_weights:
+    VIREMENT: 80
+    CARTE: 10
+    PRELEVEMENT: 10
+
 scenario_parameters:
   star_supplier_min: 3
   star_supplier_max: 7
   star_transactions_per_supplier_min: 1
   star_transactions_per_supplier_max: 2
+  ghost_transaction_count: 3
   circular_member_min: 3
   circular_member_max: 5
   internal_employee_min: 2
@@ -34,8 +45,8 @@ scenario_parameters:
   shell_transaction_max: 5
   shell_transaction_min_amount: 80000
   shell_transaction_max_amount: 180000
-  bribe_days_before_transaction_min: 1
-  bribe_days_before_transaction_max: 30
+  bribe_days_before_transaction_min: 0
+  bribe_days_before_transaction_max: 7
   hidden_link_min_attributes: 3
   hidden_link_max_attributes: 4
   hidden_link_attributes:
