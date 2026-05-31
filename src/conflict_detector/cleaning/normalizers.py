@@ -2,8 +2,15 @@ import re
 import unicodedata
 
 
-def normalize_string(value: object) -> str:
+def is_empty(value: object) -> bool:
     if value is None:
+        return True
+    text = str(value).strip()
+    return text == "" or text.lower() in {"nan", "nat", "none"}
+
+
+def normalize_string(value: object) -> str:
+    if is_empty(value):
         return ""
     text = str(value).strip().upper()
     text = unicodedata.normalize("NFD", text)
@@ -26,12 +33,22 @@ def normalize_phone(value: object) -> str:
 
 
 def normalize_email(value: object) -> str:
-    return str(value or "").strip().lower()
+    if is_empty(value):
+        return ""
+    text = str(value).strip().lower()
+    text = unicodedata.normalize("NFD", text)
+    return "".join(char for char in text if unicodedata.category(char) != "Mn")
 
 
 def normalize_address(value: object) -> str:
     text = normalize_string(value)
-    replacements = {"AVENUE": "AVE", "BOULEVARD": "BD", "IMPASSE": "IMP", "CHEMIN": "CHE"}
+    replacements = {
+        "AVENUE": "AV",
+        "BOULEVARD": "BD",
+        "IMPASSE": "IMP",
+        "CHEMIN": "CHE",
+        "NUMERO": "NO",
+    }
     for source, target in replacements.items():
         text = re.sub(rf"\b{source}\b", target, text)
     return re.sub(r"\s+", " ", text).strip()

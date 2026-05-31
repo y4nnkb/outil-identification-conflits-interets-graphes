@@ -208,7 +208,7 @@ conflict-detector run --data data/generated --output output
 conflict-detector reset
 ```
 
-À ce stade, seule la génération est réellement opérationnelle. Les autres commandes servent de structure pour les prochaines étapes.
+À ce stade, la génération et les premières fonctions de normalisation sont opérationnelles. Les autres commandes servent de structure pour les prochaines étapes.
 
 ## Neo4j et Cypher
 
@@ -234,6 +234,7 @@ Déjà présent :
 - configuration YAML ;
 - génération d'employés, fournisseurs et transactions ;
 - injection de scénarios suspects ;
+- normalisation des principaux attributs métier ;
 - fichiers Cypher de base ;
 - interface CLI ;
 - base de tests.
@@ -241,6 +242,7 @@ Déjà présent :
 À compléter :
 
 - chargement réel des CSV dans Neo4j ;
+- intégration complète de la normalisation dans le pipeline CLI ;
 - création complète du graphe ;
 - règles de détection Cypher/Python ;
 - scoring final des alertes ;
