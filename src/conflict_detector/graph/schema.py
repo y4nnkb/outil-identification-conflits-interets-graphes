@@ -10,6 +10,7 @@ CONSTRAINT_QUERIES = [
     "CREATE CONSTRAINT adresse_value IF NOT EXISTS FOR (n:Adresse) REQUIRE n.value IS UNIQUE",
     "CREATE CONSTRAINT iban_value IF NOT EXISTS FOR (n:Iban) REQUIRE n.value IS UNIQUE",
     "CREATE CONSTRAINT siren_value IF NOT EXISTS FOR (n:Siren) REQUIRE n.value IS UNIQUE",
+    "CREATE CONSTRAINT nom_value IF NOT EXISTS FOR (n:Nom) REQUIRE n.value IS UNIQUE",
     "CREATE CONSTRAINT contrat_id IF NOT EXISTS FOR (n:Contrat) REQUIRE n.id_contrat IS UNIQUE",
     "CREATE CONSTRAINT commande_id IF NOT EXISTS FOR (n:Commande) REQUIRE n.id_commande IS UNIQUE",
     "CREATE CONSTRAINT scenario_id IF NOT EXISTS FOR (n:Scenario) REQUIRE n.scenario_id IS UNIQUE",

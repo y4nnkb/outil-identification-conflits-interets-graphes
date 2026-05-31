@@ -11,16 +11,19 @@ NODE_QUERIES = {
         UNWIND $rows AS row
         MERGE (n:Employe {id_employe: row.id_employe})
         SET n += row
+        SET n.display_label = row.id_employe + ' - ' + coalesce(row.prenom, '') + ' ' + coalesce(row.nom, '')
     """,
     "fournisseurs": """
         UNWIND $rows AS row
         MERGE (n:Fournisseur {id_fournisseur: row.id_fournisseur})
         SET n += row
+        SET n.display_label = row.id_fournisseur + ' - ' + coalesce(row.nom, '')
     """,
     "transactions": """
         UNWIND $rows AS row
         MERGE (n:Transaction {id_transaction: row.id_transaction})
         SET n += row
+        SET n.display_label = row.id_transaction + ' - ' + coalesce(row.type_transaction, '')
     """,
 }
 
@@ -30,6 +33,7 @@ ATTRIBUTE_COLUMNS = {
         "telephone_norm": ("Telephone", "telephones"),
         "adresse_norm": ("Adresse", "adresses"),
         "iban_norm": ("Iban", "ibans"),
+        "nom_norm": ("Nom", "noms"),
     },
     "fournisseurs": {
         "email_norm": ("Email", "emails"),
@@ -37,15 +41,17 @@ ATTRIBUTE_COLUMNS = {
         "adresse_norm": ("Adresse", "adresses"),
         "iban_norm": ("Iban", "ibans"),
         "siren_norm": ("Siren", "sirens"),
+        "nom_dirigeant_norm": ("Nom", "noms"),
     },
 }
 
 ATTRIBUTE_QUERIES = {
-    "emails": "UNWIND $values AS value MERGE (:Email {value: value})",
-    "telephones": "UNWIND $values AS value MERGE (:Telephone {value: value})",
-    "adresses": "UNWIND $values AS value MERGE (:Adresse {value: value})",
-    "ibans": "UNWIND $values AS value MERGE (:Iban {value: value})",
-    "sirens": "UNWIND $values AS value MERGE (:Siren {value: value})",
+    "emails": "UNWIND $values AS value MERGE (n:Email {value: value}) SET n.display_label = value",
+    "telephones": "UNWIND $values AS value MERGE (n:Telephone {value: value}) SET n.display_label = value",
+    "adresses": "UNWIND $values AS value MERGE (n:Adresse {value: value}) SET n.display_label = left(value, 40)",
+    "ibans": "UNWIND $values AS value MERGE (n:Iban {value: value}) SET n.display_label = value",
+    "sirens": "UNWIND $values AS value MERGE (n:Siren {value: value}) SET n.display_label = value",
+    "noms": "UNWIND $values AS value MERGE (n:Nom {value: value}) SET n.display_label = value",
 }
 
 TRANSACTION_RELATION_QUERY = """
@@ -89,6 +95,12 @@ ATTRIBUTE_RELATION_QUERIES = {
         MATCH (attribute:Iban {value: row.iban_norm})
         MERGE (entity)-[:A_IBAN]->(attribute)
     """,
+    ("employes", "nom_norm"): """
+        UNWIND $rows AS row
+        MATCH (entity:Employe {id_employe: row.id_employe})
+        MATCH (attribute:Nom {value: row.nom_norm})
+        MERGE (entity)-[:A_NOM]->(attribute)
+    """,
     ("fournisseurs", "email_norm"): """
         UNWIND $rows AS row
         MATCH (entity:Fournisseur {id_fournisseur: row.id_fournisseur})
@@ -119,12 +131,19 @@ ATTRIBUTE_RELATION_QUERIES = {
         MATCH (attribute:Siren {value: row.siren_norm})
         MERGE (entity)-[:A_SIREN]->(attribute)
     """,
+    ("fournisseurs", "nom_dirigeant_norm"): """
+        UNWIND $rows AS row
+        MATCH (entity:Fournisseur {id_fournisseur: row.id_fournisseur})
+        MATCH (attribute:Nom {value: row.nom_dirigeant_norm})
+        MERGE (entity)-[:A_NOM]->(attribute)
+    """,
 }
 
 CONTRACT_RELATION_QUERY = """
     UNWIND $rows AS row
     MATCH (t:Transaction {id_transaction: row.id_transaction})
     MERGE (c:Contrat {id_contrat: row.id_contrat})
+    SET c.display_label = row.id_contrat
     MERGE (t)-[:RATTACHEE_A_CONTRAT]->(c)
 """
 
@@ -132,6 +151,7 @@ ORDER_NODE_RELATION_QUERY = """
     UNWIND $rows AS row
     MATCH (t:Transaction {id_transaction: row.id_transaction})
     MERGE (c:Commande {id_commande: row.id_commande})
+    SET c.display_label = row.id_commande
     MERGE (t)-[:REPRESENTE_COMMANDE]->(c)
 """
 
@@ -147,6 +167,8 @@ SCENARIO_NODE_QUERY = """
     UNWIND $rows AS row
     MERGE (scenario:Scenario {scenario_id: row.scenario_id})
     MERGE (scenarioCase:ScenarioCase {case_id: row.case_id})
+    SET scenario.display_label = row.scenario_id,
+        scenarioCase.display_label = row.case_id
     SET scenarioCase.scenario_id = row.scenario_id,
         scenarioCase.entity_ids = row.entity_ids
     MERGE (scenarioCase)-[:TYPE_SCENARIO]->(scenario)

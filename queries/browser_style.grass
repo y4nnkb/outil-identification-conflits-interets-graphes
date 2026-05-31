@@ -1,0 +1,62 @@
+node {
+  caption: "{display_label}";
+}
+
+node.Employe {
+  caption: "{display_label}";
+  color: #68bdf6;
+}
+
+node.Fournisseur {
+  caption: "{display_label}";
+  color: #ff928c;
+}
+
+node.Transaction {
+  caption: "{display_label}";
+  color: #65d98c;
+}
+
+node.Adresse {
+  caption: "{display_label}";
+  color: #f6c85f;
+}
+
+node.Email {
+  caption: "{display_label}";
+  color: #b39ddb;
+}
+
+node.Telephone {
+  caption: "{display_label}";
+  color: #80cbc4;
+}
+
+node.Iban {
+  caption: "{display_label}";
+  color: #f48fb1;
+}
+
+node.Siren {
+  caption: "{display_label}";
+  color: #ffab91;
+}
+
+node.Nom {
+  caption: "{display_label}";
+  color: #d7ccc8;
+}
+
+node.Contrat {
+  caption: "{display_label}";
+  color: #c5e1a5;
+}
+
+node.Commande {
+  caption: "{display_label}";
+  color: #90caf9;
+}
+
+relationship {
+  caption: "<type>";
+}

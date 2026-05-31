@@ -1,59 +1,64 @@
 # Outil d'identification de conflits d'intérêts via les graphes relationnels
 
-Projet Python visant à modéliser les relations entre employés, fournisseurs et transactions afin de préparer l'identification de conflits d'intérêts à l'aide de Neo4j et de requêtes Cypher.
+Projet Python de génération, chargement Neo4j, détection Cypher, scoring et export d'alertes de conflits d'intérêts entre employés, fournisseurs et transactions.
 
-Le projet permet actuellement de générer un jeu de données synthétique contrôlé. Les étapes de chargement Neo4j, de détection automatisée, de scoring complet et de reporting final sont prévues dans l'architecture, mais restent à développer.
+L'objectif est de transformer des données transactionnelles en graphe relationnel pour détecter des signaux faibles difficiles à repérer dans des tableaux classiques : attributs partagés, fournisseurs fantômes, sociétés écrans, cadeaux, concentration financière, réseaux internes et relations indirectes.
 
-## Objectif
+## Fonctionnalités
 
-L'objectif est de transformer des données transactionnelles en graphe relationnel pour faire ressortir des signaux faibles difficiles à détecter dans des tableaux classiques :
-
-- liens entre employés et fournisseurs ;
-- attributs partagés : adresse, IBAN, email, téléphone, SIREN ;
-- fournisseurs fantômes ;
-- sociétés écrans ;
-- cadeaux ou avantages avant validation ;
-- concentration financière ;
-- réseaux internes ou relations indirectes.
+- génération contrôlée de données synthétiques ;
+- injection de scénarios suspects avec proportions configurables ;
+- ajout de bruit réaliste dans les données ;
+- nettoyage et normalisation des attributs clés ;
+- chargement des noeuds et relations dans Neo4j ;
+- création des contraintes et index Neo4j ;
+- règles de détection Cypher sans utiliser les labels de vérité terrain ;
+- scoring des alertes ;
+- exports CSV/JSON ;
+- évaluation sur dataset synthétique via `scenario_labels.csv` ;
+- requêtes de visualisation Neo4j Browser.
 
 ## Structure
 
 ```text
 .
-├── configs/
-│   ├── generation.yml
-│   ├── neo4j.yml
-│   └── scoring.yml
-├── queries/
-│   ├── schema.cypher
-│   ├── detection.cypher
-│   └── similarity.cypher
-├── scripts/
-│   └── generate_dataset.py
-├── src/
-│   └── conflict_detector/
-│       ├── app/
-│       ├── cleaning/
-│       ├── detection/
-│       ├── domain/
-│       ├── generation/
-│       ├── graph/
-│       ├── io/
-│       ├── reporting/
-│       ├── scoring/
-│       └── settings.py
-├── tests/
-├── .env.example
-├── pyproject.toml
-└── README.md
+|-- configs/
+|   |-- generation.yml
+|   |-- neo4j.yml
+|   `-- scoring.yml
+|-- queries/
+|   |-- browser_style.grass
+|   |-- detection.cypher
+|   |-- schema.cypher
+|   |-- similarity.cypher
+|   `-- visualization.cypher
+|-- scripts/
+|   `-- generate_dataset.py
+|-- src/
+|   `-- conflict_detector/
+|       |-- app/
+|       |-- cleaning/
+|       |-- detection/
+|       |-- domain/
+|       |-- generation/
+|       |-- graph/
+|       |-- io/
+|       |-- reporting/
+|       |-- scoring/
+|       `-- settings.py
+|-- tests/
+|-- .env.example
+|-- docker-compose.yml
+|-- pyproject.toml
+`-- README.md
 ```
 
 ## Prérequis
 
-- Python 3.11 ou supérieur
-- Git
-- Docker, pour lancer Neo4j de façon portable
-- PowerShell sous Windows
+- Python 3.11 ou supérieur ;
+- Git ;
+- Docker Desktop ou Docker Engine ;
+- Neo4j lancé via Docker Compose.
 
 ## Installation
 
@@ -68,13 +73,19 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
+Sur macOS ou Linux, l'activation de l'environnement virtuel se fait avec :
+
+```bash
+source .venv/bin/activate
+```
+
 Vérifier l'installation :
 
 ```powershell
 python -c "import conflict_detector; print('OK')"
 ```
 
-## Neo4j avec Docker
+## Neo4j Avec Docker
 
 Créer le fichier d'environnement local :
 
@@ -82,7 +93,13 @@ Créer le fichier d'environnement local :
 Copy-Item .env.example .env
 ```
 
-Modifier `NEO4J_PASSWORD` dans `.env`, puis lancer Neo4j :
+Sur macOS ou Linux :
+
+```bash
+cp .env.example .env
+```
+
+Lancer Neo4j :
 
 ```powershell
 docker compose up -d neo4j
@@ -118,187 +135,28 @@ Tester la connexion depuis Python :
 conflict-detector check-neo4j
 ```
 
-Cette commande charge `.env`, ouvre une connexion Bolt vers Neo4j, exécute `RETURN 1 AS test`, puis ferme la connexion.
+## Pipeline Principal
 
-Créer les contraintes et index Neo4j :
-
-```powershell
-conflict-detector create-schema
-```
-
-Vider les données du graphe sans supprimer les contraintes :
-
-```powershell
-conflict-detector reset
-```
-
-Charger le graphe depuis les CSV générés :
-
-```powershell
-conflict-detector load --data data/generated --reset
-```
-
-Cette commande lit les CSV, applique la normalisation, crée le schéma si besoin, puis charge les nœuds `Employe`, `Fournisseur`, `Transaction`, les nœuds d'attributs partagés et les relations du graphe.
-
-Les relations créées à ce stade sont :
-
-- `(:Employe)-[:A_EFFECTUE]->(:Transaction)` ;
-- `(:Transaction)-[:VERS]->(:Fournisseur)` ;
-- `(:Employe)-[:MANAGE]->(:Employe)` ;
-- `(:Employe|Fournisseur)-[:A_EMAIL|A_TELEPHONE|A_ADRESSE|A_IBAN]->(:Email|Telephone|Adresse|Iban)` ;
-- `(:Fournisseur)-[:A_SIREN]->(:Siren)` ;
-- `(:Transaction)-[:RATTACHEE_A_CONTRAT]->(:Contrat)` ;
-- `(:Transaction)-[:REPRESENTE_COMMANDE]->(:Commande)` ;
-- `(:Transaction)-[:FACTURE_COMMANDE]->(:Transaction)` ;
-- `(:Employe|Fournisseur|Transaction)-[:IMPLIQUE_DANS]->(:ScenarioCase)-[:TYPE_SCENARIO]->(:Scenario)`.
-
-Le chargement utilise `UNWIND` par lots : Python envoie une liste de lignes CSV à Neo4j, puis Cypher traite chaque ligne côté base. Cela évite d'envoyer une requête par ligne et permet de charger plusieurs centaines de lignes à la fois.
-
-## Génération des données
-
-La génération est pilotée par :
-
-```text
-configs/generation.yml
-```
-
-Commande principale :
-
-```powershell
-python scripts\generate_dataset.py --config configs\generation.yml
-```
-
-Commande équivalente via la CLI :
+Générer les CSV synthétiques :
 
 ```powershell
 conflict-detector generate --config configs/generation.yml
 ```
 
-Les fichiers générés sont créés dans `data/generated/` :
+Charger Neo4j puis lancer détection, scoring, exports et évaluation :
 
-- `employes.csv`
-- `fournisseurs.csv`
-- `transactions.csv`
-- `scenario_labels.csv`
-- `generation_manifest.json`
+```powershell
+conflict-detector run --data data/generated --output output --reset
+```
 
-`scenario_labels.csv` sert de fichier de contrôle pour savoir quels scénarios ont été injectés. Il n'est pas destiné à être utilisé comme donnée métier.
+Résultats générés :
 
-`generation_manifest.json` conserve les paramètres de génération utilisés, la seed, les volumes demandés, les nombres de lignes générées et les scénarios effectivement injectés.
+- `output/alerts.csv`
+- `output/alerts.json`
+- `output/summary.json`
+- `output/evaluation.json`
 
-## Configuration de la génération
-
-La section `amounts` de `configs/generation.yml` permet de régler :
-
-- `min` et `max` : montants généraux des transactions ;
-- `ghost_invoice_max` : montant maximal des petites transactions associées aux fournisseurs fantômes ;
-- `gift_min` et `gift_max` : fourchette utilisée pour générer les montants de cadeaux ou avantages.
-
-La section `transaction_parameters` permet de régler les paramètres des transactions générées hors scénario :
-
-- proportion de contrats dans le jeu de données ;
-- proportion de factures rattachées à une commande existante ;
-- délai entre la date de transaction et la date de validation ;
-- poids des modes de paiement.
-
-La section `scenario_parameters` permet de régler les paramètres propres aux scénarios :
-
-- taille des motifs en étoile, circulaires et internes ;
-- nombre de transactions associées à certains scénarios ;
-- fourchettes de montants pour les sociétés écrans et la concentration financière ;
-- fenêtre de dates entre un cadeau et le contrat associé ;
-- attributs utilisables pour les liens cachés et les doubles correspondances.
-
-La section `scenario_mix` permet de choisir la proportion ou le nombre exact de scénarios à injecter. Quand `count` est renseigné, il prend le dessus sur `percent`.
-
-La section `noise` permet d'ajouter du bruit réaliste dans les CSV générés :
-
-- `duplicate_rate_percent` ajoute des lignes dupliquées dans les tables métier ;
-- `missing_value_rate_percent` remplace certains attributs métier par une valeur vide ;
-- `typo_rate_percent` corrompt certains attributs métier avec une faute volontaire.
-
-Le bruit ne modifie pas les identifiants techniques comme `id_employe`, `id_fournisseur` ou `id_transaction`, afin de ne pas casser artificiellement les relations de base.
-
-## Nettoyage et valeurs invalides
-
-Avant le chargement dans Neo4j, le pipeline de nettoyage crée des colonnes normalisées comme `email_norm`, `telephone_norm`, `adresse_norm`, `iban_norm` et `siren_norm`.
-
-Les champs vides ou invalides sont traités ainsi :
-
-- un email invalide devient vide dans `email_norm` ;
-- un téléphone invalide devient vide dans `telephone_norm` ;
-- un IBAN invalide devient vide dans `iban_norm` ;
-- un SIREN invalide devient vide dans `siren_norm` ;
-- une transaction qui référence un employé ou un fournisseur inexistant est retirée.
-
-Le chargeur Neo4j ignore les valeurs vides, `nan`, `nat` et `none` pour les attributs partagés. Deux IBAN vides, deux emails vides ou deux téléphones vides ne créent donc pas de faux lien commun.
-
-## Données générées
-
-### Employés
-
-Chaque employé contient notamment :
-
-- un identifiant ;
-- un nom et prénom ;
-- un email ;
-- un téléphone ;
-- une adresse ;
-- un IBAN ;
-- un poste ;
-- un département ;
-- un manager ;
-- une date d'embauche.
-
-### Fournisseurs
-
-Chaque fournisseur contient notamment :
-
-- un identifiant ;
-- un nom ;
-- un SIREN ;
-- un email ;
-- un téléphone ;
-- une adresse ;
-- un IBAN ;
-- un dirigeant ;
-- un bénéficiaire effectif ;
-- une date de création ;
-- des indicateurs `is_boite_postale` et `is_societe_ecran`.
-
-### Transactions
-
-Chaque transaction contient notamment :
-
-- un identifiant ;
-- un employé ;
-- un fournisseur ;
-- une date de transaction ;
-- un montant ;
-- un type : `CONTRAT`, `FACTURE` ou `COMMANDE` ;
-- un contrat de rattachement ;
-- une commande de rattachement éventuelle pour certaines factures ;
-- une date de validation ;
-- un mode de paiement ;
-- des champs liés aux cadeaux ou avantages.
-
-Les transactions sont triées par date après génération.
-
-## Scénarios injectés
-
-Le fichier `configs/generation.yml` permet de régler le pourcentage ou le nombre exact de scénarios injectés :
-
-- `direct_link` : lien direct entre un employé et un fournisseur ;
-- `identity_match` : email ou téléphone partagé ;
-- `ghost_supplier` : fournisseur en boîte postale avec petites transactions vagues ;
-- `shell_entity` : fournisseur marqué comme société écran ;
-- `bribes_gifts` : cadeau ou avantage associé à une transaction avant validation ;
-- `multiple_hidden_links` : plusieurs attributs partagés ;
-- `internal_network` : groupe d'employés et fournisseurs reliés ;
-- `star_pattern` : un employé relié à plusieurs fournisseurs ;
-- `circular_network` : fournisseurs reliés entre eux par attributs partagés ;
-- `financial_concentration` : plusieurs transactions importantes sur un même couple employé/fournisseur ;
-- `double_match` : deux attributs partagés entre employé et fournisseur, parcourus parmi toutes les combinaisons possibles d'attributs configurés.
+`evaluation.json` n'est produit que si `data/generated/scenario_labels.csv` existe.
 
 ## Commandes CLI
 
@@ -308,52 +166,272 @@ conflict-detector check-neo4j
 conflict-detector create-schema
 conflict-detector load --data data/generated --reset
 conflict-detector detect --output output
-conflict-detector run --data data/generated --output output
+conflict-detector evaluate --alerts-file output/alerts.json --labels-file data/generated/scenario_labels.csv --output-file output/evaluation.json
+conflict-detector run --data data/generated --output output --reset
 conflict-detector reset
 ```
 
-- `generate` génère les CSV, injecte les scénarios, applique le bruit configuré et écrit le manifeste.
-- `check-neo4j` vérifie que la connexion à Neo4j fonctionne.
+- `generate` génère les CSV, injecte les scénarios, applique le bruit et écrit le manifeste.
+- `check-neo4j` vérifie la connexion Neo4j avec `RETURN 1 AS test`.
 - `create-schema` crée les contraintes et index Neo4j.
-- `load` nettoie les CSV puis charge les nœuds et relations dans Neo4j.
-- `load --reset` vide le graphe avant de recharger les données.
-- `reset` supprime les nœuds et relations du graphe sans supprimer les contraintes.
-- `detect`, `run` et `export` restent des commandes de structure pour les prochaines étapes.
+- `load` nettoie les CSV puis charge les noeuds et relations dans Neo4j.
+- `detect` exécute les règles Cypher, score les alertes et exporte les résultats.
+- `evaluate` compare les alertes avec `scenario_labels.csv` sur un dataset synthétique.
+- `run` exécute le pipeline complet.
+- `reset` vide le graphe Neo4j sans supprimer les contraintes.
 
-## Neo4j et Cypher
+## Données Générées
 
-Les fichiers du dossier `queries/` préparent les futures étapes Neo4j :
+### Employés
 
-- `schema.cypher` définit les contraintes d'unicité ;
-- `similarity.cypher` prépare les liens de similarité entre entités ;
-- `detection.cypher` servira aux règles de détection.
+Chaque employé contient notamment :
+
+- `id_employe`
+- `prenom`
+- `nom`
+- `email`
+- `telephone`
+- `adresse`
+- `iban`
+- `poste`
+- `departement`
+- `manager_id`
+- `date_embauche`
+
+### Fournisseurs
+
+Chaque fournisseur contient notamment :
+
+- `id_fournisseur`
+- `nom`
+- `siren`
+- `email`
+- `telephone`
+- `adresse`
+- `iban`
+- `nom_dirigeant`
+- `beneficiaire_effectif`
+- `date_creation`
+- `is_boite_postale`
+- `is_societe_ecran`
+
+### Transactions
+
+Chaque transaction contient notamment :
+
+- `id_transaction`
+- `id_employe`
+- `id_fournisseur`
+- `date_transaction`
+- `montant`
+- `devise`
+- `type_transaction`
+- `description`
+- `id_contrat`
+- `id_commande`
+- `date_validation`
+- `mode_paiement`
+- `cadeau_ou_avantage`
+- `date_cadeau`
+- `montant_cadeau`
+
+Les transactions sont triées par date après génération.
+
+## Configuration De Génération
+
+Le fichier principal est :
+
+```text
+configs/generation.yml
+```
+
+Sections importantes :
+
+- `seed` : rend la génération reproductible.
+- `output_dir` : dossier de sortie des CSV.
+- `date_range` : période des transactions.
+- `volumes` : nombre d'employés, fournisseurs et transactions.
+- `amounts` : montants généraux, montants de cadeaux et plafond fournisseur fantôme.
+- `transaction_parameters` : contrats, factures rattachées à commandes, délais de validation, modes de paiement.
+- `scenario_parameters` : paramètres propres aux scénarios.
+- `scenario_mix` : pourcentage ou nombre exact de scénarios injectés.
+- `noise` : doublons, valeurs manquantes et fautes volontaires.
+
+Quand `count` est renseigné dans `scenario_mix`, il prend le dessus sur `percent`.
+
+## Scénarios Injectés
+
+- `direct_link` : adresse partagée entre employé et fournisseur avec transaction associée.
+- `identity_match` : email ou téléphone partagé avec transaction associée.
+- `ghost_supplier` : fournisseur en boîte postale avec petites transactions vagues.
+- `shell_entity` : fournisseur dont le bénéficiaire effectif correspond à un employé.
+- `bribes_gifts` : cadeau ou avantage entre 0 et 7 jours avant une transaction.
+- `multiple_hidden_links` : au moins trois attributs partagés.
+- `internal_network` : manager, employés, fournisseurs et adresse commune.
+- `star_pattern` : un employé pivot relié à plusieurs fournisseurs.
+- `circular_network` : fournisseurs reliés entre eux par attributs partagés.
+- `financial_concentration` : volume financier concentré sur un couple employé/fournisseur.
+- `double_match` : deux attributs partagés entre un employé et un fournisseur.
+
+Le générateur verrouille certains champs critiques pendant l'injection pour éviter qu'un scénario ultérieur écrase un scénario déjà créé.
+
+## Nettoyage
+
+Le pipeline de nettoyage crée notamment :
+
+- `email_norm`
+- `telephone_norm`
+- `adresse_norm`
+- `iban_norm`
+- `siren_norm`
+- `nom_norm`
+- `nom_dirigeant_norm` quand `nom_dirigeant` existe
+
+Les valeurs invalides d'email, téléphone, IBAN ou SIREN sont vidées côté colonne normalisée. Le chargeur Neo4j ignore les valeurs vides, `nan`, `nat` et `none`, ce qui évite de relier deux entités uniquement parce que leurs attributs sont manquants.
+
+## Modèle Neo4j
+
+Noeuds principaux :
+
+- `Employe`
+- `Fournisseur`
+- `Transaction`
+- `Email`
+- `Telephone`
+- `Adresse`
+- `Iban`
+- `Siren`
+- `Nom`
+- `Contrat`
+- `Commande`
+- `Scenario`
+- `ScenarioCase`
+
+Relations principales :
+
+- `(:Employe)-[:A_EFFECTUE]->(:Transaction)`
+- `(:Transaction)-[:VERS]->(:Fournisseur)`
+- `(:Employe)-[:MANAGE]->(:Employe)`
+- `(:Employe|Fournisseur)-[:A_EMAIL]->(:Email)`
+- `(:Employe|Fournisseur)-[:A_TELEPHONE]->(:Telephone)`
+- `(:Employe|Fournisseur)-[:A_ADRESSE]->(:Adresse)`
+- `(:Employe|Fournisseur)-[:A_IBAN]->(:Iban)`
+- `(:Employe|Fournisseur)-[:A_NOM]->(:Nom)`
+- `(:Fournisseur)-[:A_SIREN]->(:Siren)`
+- `(:Transaction)-[:RATTACHEE_A_CONTRAT]->(:Contrat)`
+- `(:Transaction)-[:REPRESENTE_COMMANDE]->(:Commande)`
+- `(:Transaction)-[:FACTURE_COMMANDE]->(:Transaction)`
+- `(:Employe|Fournisseur|Transaction)-[:IMPLIQUE_DANS]->(:ScenarioCase)-[:TYPE_SCENARIO]->(:Scenario)`
+
+Les noeuds `Scenario` et `ScenarioCase` servent à visualiser et évaluer les données synthétiques. Les règles de détection n'utilisent pas ces noeuds pour trouver les alertes.
+
+## Détection Et Scoring
+
+Les règles automatisées sont définies dans :
+
+```text
+src/conflict_detector/detection/cypher_rules.py
+```
+
+Elles couvrent :
+
+- IBAN partagé ;
+- email partagé ;
+- téléphone partagé ;
+- adresse partagée ;
+- deux attributs partagés ;
+- plusieurs attributs partagés ;
+- fournisseur en boîte postale ;
+- cadeau ou avantage proche d'une transaction ;
+- bénéficiaire effectif correspondant à un employé ;
+- motif en étoile ;
+- réseau circulaire ;
+- concentration financière ;
+- réseau interne lié à la hiérarchie manager.
+
+Chaque alerte contient :
+
+- `scenario_id`
+- `entities`
+- `evidence`
+- `path`
+- `source_rows`
+- `score`
+- `severity`
+
+Le scoring est configuré dans :
+
+```text
+configs/scoring.yml
+```
+
+## Évaluation
+
+L'évaluation compare les alertes détectées avec `scenario_labels.csv`.
+
+- précision : part des alertes sorties qui correspondent à un scénario injecté ;
+- rappel : part des scénarios injectés retrouvés par les règles.
+
+Cette évaluation est utile sur les données synthétiques uniquement. Sur une base client, `scenario_labels.csv` n'existe pas et ne doit pas être utilisé.
+
+## Visualisation Neo4j Browser
+
+Les requêtes utiles sont dans :
+
+```text
+queries/visualization.cypher
+queries/detection.cypher
+```
+
+Neo4j Browser place les noeuds librement à l'écran. Le graphe reste orienté : il faut lire le sens de la flèche sur la relation.
+
+Exemple :
+
+```cypher
+MATCH p = (f:Fournisseur)-[:A_SIREN]->(s:Siren)
+RETURN p
+LIMIT 50;
+```
+
+Le fournisseur pointe vers son SIREN.
+
+Pour afficher des noms lisibles dans le graphe :
+
+1. Ouvrir Neo4j Browser.
+2. Taper `:style`.
+3. Copier le contenu de `queries/browser_style.grass`.
+4. Coller ce contenu dans l'éditeur de style Neo4j Browser.
+
+Le style force l'affichage de `display_label`, par exemple `EMP0001 - Lucie Marie` ou `TRX00042 - FACTURE`.
 
 ## Tests
 
 ```powershell
 python -m pytest
+python -m compileall src scripts tests
 ```
 
-Les tests servent à sécuriser progressivement la génération, les contrats de règles, le scoring et le pipeline.
+Les tests couvrent la génération, le bruit, la normalisation, le chargement Neo4j, les contrats des règles, le scoring, l'évaluation et un pipeline de bout en bout sur petit dataset.
 
-## État d'avancement
+## État Actuel
 
-Déjà présent :
+Présent :
 
-- architecture Python installable ;
-- configuration YAML ;
-- génération d'employés, fournisseurs et transactions ;
-- injection de scénarios suspects ;
-- bruit configurable sur les données générées ;
-- normalisation des principaux attributs métier ;
-- chargement des nœuds et relations dans Neo4j ;
-- contraintes et index Neo4j ;
-- interface CLI ;
-- base de tests.
+- génération synthétique complète ;
+- injection de scénarios ;
+- bruit configurable ;
+- nettoyage et normalisation ;
+- chargement Neo4j ;
+- contraintes et index ;
+- règles Cypher ;
+- scoring ;
+- exports ;
+- évaluation synthétique ;
+- style et requêtes de visualisation Neo4j Browser ;
+- tests automatisés.
 
-À compléter :
+À améliorer ensuite :
 
-- règles de détection Cypher/Python ;
-- scoring final des alertes ;
-- exports exploitables ;
-- interface ou visualisation finale.
+- précision des règles sur les scénarios très larges ;
+- visualisation finale des alertes ;
+- ergonomie d'analyse par score, scénario et gravité.

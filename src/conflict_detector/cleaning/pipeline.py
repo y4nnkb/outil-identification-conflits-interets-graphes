@@ -38,6 +38,7 @@ NORMALIZE_COLUMNS = {
         "iban": ("iban_norm", normalize_iban),
         "siren": ("siren_norm", normalize_siren),
         "nom": ("nom_norm", normalize_string),
+        "nom_dirigeant": ("nom_dirigeant_norm", normalize_string),
     },
 }
 
@@ -58,6 +59,8 @@ def clean_tables(tables: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
 
     for table_name, columns in NORMALIZE_COLUMNS.items():
         for source_column, (normalized_column, normalizer) in columns.items():
+            if source_column not in cleaned[table_name].columns:
+                continue
             cleaned[table_name][normalized_column] = cleaned[table_name][source_column].apply(normalizer)
 
     for table_name, columns in VALIDATE_COLUMNS.items():

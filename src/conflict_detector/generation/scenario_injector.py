@@ -14,6 +14,7 @@ class ScenarioInjector:
         self.index = 0
         self.transaction_index = 0
         self.double_match_pair_index = 0
+        self.locked_fields: set[tuple[str, str]] = set()
         self.random = Random(config.seed)
         self.fake = Faker("fr_FR")
         self.fake.seed_instance(config.seed)
@@ -46,28 +47,37 @@ class ScenarioInjector:
         """Simule un lien direct employé-fournisseur via une adresse commune.
         Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
         Sortie : tables modifiées avec une adresse partagée et un label de scénario."""
-        employe = self._row(tables["employes"])
-        fournisseur = self._row(tables["fournisseurs"])
+        employe = self._row_with_unlocked_fields(tables["employes"], ["adresse"])
+        fournisseur = self._row_with_unlocked_fields(tables["fournisseurs"], ["adresse"])
+        transaction = self._transaction_row(tables)
         self._set_address(fournisseur, employe["adresse"])
-        self._tag(tables, ScenarioId.DIRECT_LINK, employe["id_employe"], fournisseur["id_fournisseur"])
+        self._lock_fields(employe, ["adresse"])
+        self._lock_fields(fournisseur, ["adresse"])
+        self._attach_transaction(transaction, employe, fournisseur)
+        self._tag(tables, ScenarioId.DIRECT_LINK, employe["id_employe"], fournisseur["id_fournisseur"], transaction["id_transaction"])
 
     def inject_identity_match(self, tables: dict[str, list[dict]]) -> None:
         """Simule une correspondance d'identité via email et téléphone.
         Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
         Sortie : tables modifiées avec attributs partagés et label de scénario."""
         employe = self._row(tables["employes"])
-        fournisseur = self._row(tables["fournisseurs"])
+        fournisseur = self._row_with_unlocked_fields(tables["fournisseurs"], ["email", "telephone"])
+        transaction = self._transaction_row(tables)
         fournisseur["email"] = employe["email"]
         fournisseur["telephone"] = employe["telephone"]
-        self._tag(tables, ScenarioId.IDENTITY_MATCH, employe["id_employe"], fournisseur["id_fournisseur"])
+        self._lock_fields(employe, ["email", "telephone"])
+        self._lock_fields(fournisseur, ["email", "telephone"])
+        self._attach_transaction(transaction, employe, fournisseur)
+        self._tag(tables, ScenarioId.IDENTITY_MATCH, employe["id_employe"], fournisseur["id_fournisseur"], transaction["id_transaction"])
 
     def inject_ghost_supplier(self, tables: dict[str, list[dict]]) -> None:
         """Simule un fournisseur fantôme avec boîte postale et transactions vagues.
         Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
         Sortie : tables modifiées avec fournisseur marqué, transactions associées et label de scénario."""
-        fournisseur = self._row(tables["fournisseurs"])
+        fournisseur = self._row_with_unlocked_fields(tables["fournisseurs"], ["adresse"])
         fournisseur["is_boite_postale"] = "true"
         fournisseur["adresse"] = f"BP {1000 + self.index}, {self.fake.city()}"
+        self._lock_fields(fournisseur, ["adresse"])
         transactions = self._transaction_rows(tables, self.config.scenario_parameters.ghost_transaction_count)
         for transaction in transactions:
             transaction["id_fournisseur"] = fournisseur["id_fournisseur"]
@@ -85,7 +95,7 @@ class ScenarioInjector:
         Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
         Sortie : tables modifiées avec fournisseur écran, transactions associées et label de scénario."""
         employe = self._row(tables["employes"])
-        fournisseur = self._row(tables["fournisseurs"])
+        fournisseur = self._row_with_unlocked_fields(tables["fournisseurs"], ["beneficiaire_effectif"])
         transaction_count = self.random.randint(
             self.config.scenario_parameters.shell_transaction_min,
             self.config.scenario_parameters.shell_transaction_max,
@@ -93,6 +103,7 @@ class ScenarioInjector:
         transactions = self._transaction_rows(tables, transaction_count)
         fournisseur["is_societe_ecran"] = "true"
         fournisseur["beneficiaire_effectif"] = f"{employe['prenom']} {employe['nom']}"
+        self._lock_fields(fournisseur, ["beneficiaire_effectif"])
         for transaction in transactions:
             transaction["id_employe"] = employe["id_employe"]
             transaction["id_fournisseur"] = fournisseur["id_fournisseur"]
@@ -136,10 +147,14 @@ class ScenarioInjector:
         Sortie : tables modifiées avec attributs partagés et label de scénario."""
         employe = self._row(tables["employes"])
         attributes = self._hidden_link_attributes()
-        fournisseur = self._rows_without_boite_postale(tables["fournisseurs"], 1)[0] if "adresse" in attributes else self._row(tables["fournisseurs"])
+        fournisseur = self._row_with_unlocked_fields(tables["fournisseurs"], self._attribute_storage_fields(attributes))
+        transaction = self._transaction_row(tables)
         for attribute in attributes:
             self._share_attribute(employe, fournisseur, attribute)
-        self._tag(tables, ScenarioId.MULTIPLE_HIDDEN_LINKS, employe["id_employe"], fournisseur["id_fournisseur"], *attributes)
+        self._lock_fields(employe, self._employee_attribute_fields(attributes))
+        self._lock_fields(fournisseur, self._attribute_storage_fields(attributes))
+        self._attach_transaction(transaction, employe, fournisseur)
+        self._tag(tables, ScenarioId.MULTIPLE_HIDDEN_LINKS, employe["id_employe"], fournisseur["id_fournisseur"], transaction["id_transaction"], *attributes)
 
     def inject_internal_network(self, tables: dict[str, list[dict]]) -> None:
         """Simule un réseau interne d'employés et fournisseurs liés.
@@ -149,12 +164,13 @@ class ScenarioInjector:
         employe_count = self.random.randint(self.config.scenario_parameters.internal_employee_min, self.config.scenario_parameters.internal_employee_max)
         fournisseur_count = self.random.randint(self.config.scenario_parameters.internal_supplier_min, self.config.scenario_parameters.internal_supplier_max)
         transaction_count = self.random.randint(self.config.scenario_parameters.internal_transaction_min, self.config.scenario_parameters.internal_transaction_max)
-        employes = self._rows(tables["employes"], employe_count)
-        fournisseurs = self._rows_without_boite_postale(tables["fournisseurs"], fournisseur_count)
+        employes = self._rows_with_unlocked_fields(tables["employes"], employe_count, ["adresse"])
+        fournisseurs = self._rows_with_unlocked_fields(tables["fournisseurs"], fournisseur_count, ["adresse"])
         manager_id = self.random.choice(tables["employes"])["id_employe"]
         departement = self.random.choice(["Achats", "Finance", "Juridique", "Operations"])
         for row in employes + fournisseurs:
             self._set_address(row, adresse)
+            self._lock_fields(row, ["adresse"])
         for employe in employes:
             employe["manager_id"] = manager_id
             employe["departement"] = departement
@@ -175,15 +191,17 @@ class ScenarioInjector:
         Entrée : dictionnaire de tables avec employés, fournisseurs et transactions.
         Sortie : tables modifiées avec fournisseurs reliés, transactions associées et label de scénario."""
         employe = self._row(tables["employes"])
+        self._lock_fields(employe, ["adresse", "nom"])
         fournisseur_count = self.random.randint(
             self.config.scenario_parameters.star_supplier_min,
             self.config.scenario_parameters.star_supplier_max,
         )
-        fournisseurs = self._rows(tables["fournisseurs"], fournisseur_count)
+        fournisseurs = self._rows_with_unlocked_fields(tables["fournisseurs"], fournisseur_count, ["adresse", "nom_dirigeant"])
         transactions = []
         for fournisseur in fournisseurs:
             self._set_address(fournisseur, employe["adresse"])
             fournisseur["nom_dirigeant"] = employe["nom"]
+            self._lock_fields(fournisseur, ["adresse", "nom_dirigeant"])
             transaction_count = self.random.randint(
                 self.config.scenario_parameters.star_transactions_per_supplier_min,
                 self.config.scenario_parameters.star_transactions_per_supplier_max,
@@ -208,15 +226,24 @@ class ScenarioInjector:
             self.config.scenario_parameters.circular_member_min,
             self.config.scenario_parameters.circular_member_max,
         )
-        fournisseurs = self._rows(tables["fournisseurs"], member_count)
+        fournisseurs = self._circular_suppliers(tables, member_count)
+        fournisseurs[1]["adresse"] = fournisseurs[0]["adresse"]
+        fournisseurs[2]["telephone"] = fournisseurs[1]["telephone"]
+        fournisseurs[0]["iban"] = fournisseurs[2]["iban"]
+        self._lock_fields(fournisseurs[0], ["adresse", "iban"])
+        self._lock_fields(fournisseurs[1], ["adresse", "telephone"])
+        self._lock_fields(fournisseurs[2], ["telephone", "iban"])
         attributes = ["adresse", "telephone", "iban"]
-        for index, fournisseur in enumerate(fournisseurs):
+        for index in range(2, len(fournisseurs)):
+            fournisseur = fournisseurs[index]
             next_fournisseur = fournisseurs[(index + 1) % len(fournisseurs)]
             attribute = attributes[index % len(attributes)]
             if attribute == "adresse":
                 self._set_address(next_fournisseur, fournisseur["adresse"])
             else:
                 next_fournisseur[attribute] = fournisseur[attribute]
+            self._lock_fields(fournisseur, [attribute])
+            self._lock_fields(next_fournisseur, [attribute])
         self._tag(tables, ScenarioId.CIRCULAR_NETWORK, *(fournisseur["id_fournisseur"] for fournisseur in fournisseurs))
 
     def inject_financial_concentration(self, tables: dict[str, list[dict]]) -> None:
@@ -244,10 +271,14 @@ class ScenarioInjector:
         Sortie : tables modifiées avec deux attributs partagés et label de scénario."""
         employe = self._row(tables["employes"])
         attributes = self._double_match_attributes()
-        fournisseur = self._rows_without_boite_postale(tables["fournisseurs"], 1)[0] if "adresse" in attributes else self._row(tables["fournisseurs"])
+        fournisseur = self._row_with_unlocked_fields(tables["fournisseurs"], self._attribute_storage_fields(attributes))
+        transaction = self._transaction_row(tables)
         for attribute in attributes:
             self._share_attribute(employe, fournisseur, attribute)
-        self._tag(tables, ScenarioId.DOUBLE_MATCH, employe["id_employe"], fournisseur["id_fournisseur"], *attributes)
+        self._lock_fields(employe, self._employee_attribute_fields(attributes))
+        self._lock_fields(fournisseur, self._attribute_storage_fields(attributes))
+        self._attach_transaction(transaction, employe, fournisseur)
+        self._tag(tables, ScenarioId.DOUBLE_MATCH, employe["id_employe"], fournisseur["id_fournisseur"], transaction["id_transaction"], *attributes)
 
     def _row(self, rows: list[dict]) -> dict:
         row = rows[self.index % len(rows)]
@@ -256,6 +287,39 @@ class ScenarioInjector:
 
     def _rows(self, rows: list[dict], count: int) -> list[dict]:
         return [self._row(rows) for _ in range(count)]
+
+    def _row_with_unlocked_fields(self, rows: list[dict], fields: list[str]) -> dict:
+        attempts = 0
+        while attempts < len(rows) * 2:
+            row = self._row(rows)
+            if all(not self._is_field_locked(row, field) for field in fields):
+                return row
+            attempts += 1
+        return self._row(rows)
+
+    def _rows_with_unlocked_fields(self, rows: list[dict], count: int, fields: list[str]) -> list[dict]:
+        return [self._row_with_unlocked_fields(rows, fields) for _ in range(count)]
+
+    def _circular_suppliers(self, tables: dict[str, list[dict]], count: int) -> list[dict]:
+        suppliers = []
+        used_ids: set[str] = set()
+        required_fields = [["adresse", "iban"], ["adresse", "telephone"], ["telephone", "iban"]]
+        while len(suppliers) < count:
+            fields = required_fields[len(suppliers)] if len(suppliers) < len(required_fields) else ["adresse", "telephone", "iban"]
+            supplier = self._unique_row_with_unlocked_fields(tables["fournisseurs"], fields, used_ids)
+            suppliers.append(supplier)
+            used_ids.add(supplier["id_fournisseur"])
+        return suppliers
+
+    def _unique_row_with_unlocked_fields(self, rows: list[dict], fields: list[str], used_ids: set[str]) -> dict:
+        for _ in range(len(rows) * 2):
+            row = self._row_with_unlocked_fields(rows, fields)
+            if self._entity_id(row) not in used_ids:
+                return row
+        for row in rows:
+            if self._entity_id(row) not in used_ids:
+                return row
+        return self._row(rows)
 
     def _rows_without_boite_postale(self, rows: list[dict], count: int) -> list[dict]:
         result = []
@@ -367,8 +431,31 @@ class ScenarioInjector:
         else:
             fournisseur[attribute] = employe[attribute]
 
+    def _attribute_storage_fields(self, attributes: list[str]) -> list[str]:
+        return ["nom_dirigeant" if attribute == "nom" else attribute for attribute in attributes]
+
+    def _employee_attribute_fields(self, attributes: list[str]) -> list[str]:
+        return ["nom" if attribute == "nom" else attribute for attribute in attributes]
+
+    def _entity_id(self, row: dict) -> str:
+        return str(row.get("id_employe") or row.get("id_fournisseur") or row.get("id_transaction"))
+
+    def _is_field_locked(self, row: dict, field: str) -> bool:
+        return (self._entity_id(row), field) in self.locked_fields
+
+    def _lock_fields(self, row: dict, fields: list[str]) -> None:
+        entity_id = self._entity_id(row)
+        for field in fields:
+            self.locked_fields.add((entity_id, field))
+
+    def _attach_transaction(self, transaction: dict, employe: dict, fournisseur: dict) -> None:
+        transaction["id_employe"] = employe["id_employe"]
+        transaction["id_fournisseur"] = fournisseur["id_fournisseur"]
+
     def _set_address(self, row: dict, address: str) -> None:
         if row.get("is_boite_postale") == "true":
+            return
+        if self._is_field_locked(row, "adresse") and row.get("adresse") != address:
             return
         row["adresse"] = address
 

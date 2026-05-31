@@ -68,8 +68,9 @@ def test_load_nodes_creates_business_and_attribute_nodes() -> None:
     assert any("MERGE (n:Employe" in query for query in queries)
     assert any("MERGE (n:Fournisseur" in query for query in queries)
     assert any("MERGE (n:Transaction" in query for query in queries)
-    assert any("MERGE (:Email" in query for query in queries)
-    assert any("MERGE (:Siren" in query for query in queries)
+    assert any("MERGE (n:Email" in query for query in queries)
+    assert any("MERGE (n:Siren" in query for query in queries)
+    assert any("display_label" in query for query in queries)
 
 
 def test_load_relationships_creates_business_attribute_manager_and_scenario_links() -> None:
