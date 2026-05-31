@@ -52,7 +52,7 @@ L'objectif est de transformer des données transactionnelles en graphe relationn
 
 - Python 3.11 ou supérieur
 - Git
-- Neo4j, pour les futures étapes de graphe
+- Docker, pour lancer Neo4j de façon portable
 - PowerShell sous Windows
 
 ## Installation
@@ -73,6 +73,86 @@ Vérifier l'installation :
 ```powershell
 python -c "import conflict_detector; print('OK')"
 ```
+
+## Neo4j avec Docker
+
+Créer le fichier d'environnement local :
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Modifier `NEO4J_PASSWORD` dans `.env`, puis lancer Neo4j :
+
+```powershell
+docker compose up -d neo4j
+```
+
+Interfaces disponibles :
+
+- Neo4j Browser : `http://localhost:7474`
+- Connexion Bolt utilisée par Python : `bolt://localhost:7687`
+
+Identifiants par défaut si `.env` n'est pas modifié :
+
+```text
+user: neo4j
+password: password123
+```
+
+Arrêter Neo4j :
+
+```powershell
+docker compose down
+```
+
+Supprimer aussi les données Neo4j locales :
+
+```powershell
+docker compose down -v
+```
+
+Tester la connexion depuis Python :
+
+```powershell
+conflict-detector check-neo4j
+```
+
+Cette commande charge `.env`, ouvre une connexion Bolt vers Neo4j, exécute `RETURN 1 AS test`, puis ferme la connexion.
+
+Créer les contraintes et index Neo4j :
+
+```powershell
+conflict-detector create-schema
+```
+
+Vider les données du graphe sans supprimer les contraintes :
+
+```powershell
+conflict-detector reset
+```
+
+Charger le graphe depuis les CSV générés :
+
+```powershell
+conflict-detector load --data data/generated --reset
+```
+
+Cette commande lit les CSV, applique la normalisation, crée le schéma si besoin, puis charge les nœuds `Employe`, `Fournisseur`, `Transaction`, les nœuds d'attributs partagés et les relations du graphe.
+
+Les relations créées à ce stade sont :
+
+- `(:Employe)-[:A_EFFECTUE]->(:Transaction)` ;
+- `(:Transaction)-[:VERS]->(:Fournisseur)` ;
+- `(:Employe)-[:MANAGE]->(:Employe)` ;
+- `(:Employe|Fournisseur)-[:A_EMAIL|A_TELEPHONE|A_ADRESSE|A_IBAN]->(:Email|Telephone|Adresse|Iban)` ;
+- `(:Fournisseur)-[:A_SIREN]->(:Siren)` ;
+- `(:Transaction)-[:RATTACHEE_A_CONTRAT]->(:Contrat)` ;
+- `(:Transaction)-[:REPRESENTE_COMMANDE]->(:Commande)` ;
+- `(:Transaction)-[:FACTURE_COMMANDE]->(:Transaction)` ;
+- `(:Employe|Fournisseur|Transaction)-[:IMPLIQUE_DANS]->(:ScenarioCase)-[:TYPE_SCENARIO]->(:Scenario)`.
+
+Le chargement utilise `UNWIND` par lots : Python envoie une liste de lignes CSV à Neo4j, puis Cypher traite chaque ligne côté base. Cela évite d'envoyer une requête par ligne et permet de charger plusieurs centaines de lignes à la fois.
 
 ## Génération des données
 
@@ -130,6 +210,28 @@ La section `scenario_parameters` permet de régler les paramètres propres aux s
 - attributs utilisables pour les liens cachés et les doubles correspondances.
 
 La section `scenario_mix` permet de choisir la proportion ou le nombre exact de scénarios à injecter. Quand `count` est renseigné, il prend le dessus sur `percent`.
+
+La section `noise` permet d'ajouter du bruit réaliste dans les CSV générés :
+
+- `duplicate_rate_percent` ajoute des lignes dupliquées dans les tables métier ;
+- `missing_value_rate_percent` remplace certains attributs métier par une valeur vide ;
+- `typo_rate_percent` corrompt certains attributs métier avec une faute volontaire.
+
+Le bruit ne modifie pas les identifiants techniques comme `id_employe`, `id_fournisseur` ou `id_transaction`, afin de ne pas casser artificiellement les relations de base.
+
+## Nettoyage et valeurs invalides
+
+Avant le chargement dans Neo4j, le pipeline de nettoyage crée des colonnes normalisées comme `email_norm`, `telephone_norm`, `adresse_norm`, `iban_norm` et `siren_norm`.
+
+Les champs vides ou invalides sont traités ainsi :
+
+- un email invalide devient vide dans `email_norm` ;
+- un téléphone invalide devient vide dans `telephone_norm` ;
+- un IBAN invalide devient vide dans `iban_norm` ;
+- un SIREN invalide devient vide dans `siren_norm` ;
+- une transaction qui référence un employé ou un fournisseur inexistant est retirée.
+
+Le chargeur Neo4j ignore les valeurs vides, `nan`, `nat` et `none` pour les attributs partagés. Deux IBAN vides, deux emails vides ou deux téléphones vides ne créent donc pas de faux lien commun.
 
 ## Données générées
 
@@ -202,13 +304,21 @@ Le fichier `configs/generation.yml` permet de régler le pourcentage ou le nombr
 
 ```powershell
 conflict-detector generate --config configs/generation.yml
-conflict-detector load --data data/generated
+conflict-detector check-neo4j
+conflict-detector create-schema
+conflict-detector load --data data/generated --reset
 conflict-detector detect --output output
 conflict-detector run --data data/generated --output output
 conflict-detector reset
 ```
 
-À ce stade, la génération et les premières fonctions de normalisation sont opérationnelles. Les autres commandes servent de structure pour les prochaines étapes.
+- `generate` génère les CSV, injecte les scénarios, applique le bruit configuré et écrit le manifeste.
+- `check-neo4j` vérifie que la connexion à Neo4j fonctionne.
+- `create-schema` crée les contraintes et index Neo4j.
+- `load` nettoie les CSV puis charge les nœuds et relations dans Neo4j.
+- `load --reset` vide le graphe avant de recharger les données.
+- `reset` supprime les nœuds et relations du graphe sans supprimer les contraintes.
+- `detect`, `run` et `export` restent des commandes de structure pour les prochaines étapes.
 
 ## Neo4j et Cypher
 
@@ -234,16 +344,15 @@ Déjà présent :
 - configuration YAML ;
 - génération d'employés, fournisseurs et transactions ;
 - injection de scénarios suspects ;
+- bruit configurable sur les données générées ;
 - normalisation des principaux attributs métier ;
-- fichiers Cypher de base ;
+- chargement des nœuds et relations dans Neo4j ;
+- contraintes et index Neo4j ;
 - interface CLI ;
 - base de tests.
 
 À compléter :
 
-- chargement réel des CSV dans Neo4j ;
-- intégration complète de la normalisation dans le pipeline CLI ;
-- création complète du graphe ;
 - règles de détection Cypher/Python ;
 - scoring final des alertes ;
 - exports exploitables ;

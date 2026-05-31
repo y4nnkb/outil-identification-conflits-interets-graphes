@@ -165,6 +165,7 @@ class ScenarioInjector:
         self._tag(
             tables,
             ScenarioId.INTERNAL_NETWORK,
+            manager_id,
             *(row.get("id_employe") or row.get("id_fournisseur") for row in employes + fournisseurs),
             *(transaction["id_transaction"] for transaction in transactions),
         )

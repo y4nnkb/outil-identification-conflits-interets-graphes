@@ -2,14 +2,50 @@ from pathlib import Path
 
 import typer
 
+from conflict_detector.cleaning.pipeline import clean_tables
+from conflict_detector.graph.connection import check_connection, get_driver
+from conflict_detector.graph.loader import load_full_graph
+from conflict_detector.graph.schema import clear_graph, create_schema
+from conflict_detector.io.csv_reader import read_input_tables
 from conflict_detector.reporting.exporters import export_report_bundle
 from conflict_detector.generation.config import GenerationConfig, resolve_scenario_counts
 from conflict_detector.generation.factory import DatasetFactory
+from conflict_detector.generation.noise import NoiseInjector
 from conflict_detector.generation.scenario_injector import ScenarioInjector
 from conflict_detector.generation.writer import build_manifest, write_dataset, write_manifest
 from conflict_detector.settings import load_generation_config
 
 app = typer.Typer()
+
+
+@app.command("check-neo4j")
+def check_neo4j(env_file: Path = Path(".env")) -> None:
+    driver = None
+    try:
+        driver = get_driver(env_file=env_file)
+        result = check_connection(driver)
+    except Exception as error:
+        typer.echo(f"Connexion Neo4j impossible: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    finally:
+        if driver is not None:
+            driver.close()
+    typer.echo(f"Connexion Neo4j OK: RETURN 1 = {result}")
+
+
+@app.command("create-schema")
+def create_neo4j_schema(env_file: Path = Path(".env")) -> None:
+    driver = None
+    try:
+        driver = get_driver(env_file=env_file)
+        create_schema(driver)
+    except Exception as error:
+        typer.echo(f"Creation du schema Neo4j impossible: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    finally:
+        if driver is not None:
+            driver.close()
+    typer.echo("Schema Neo4j cree ou deja existant")
 
 
 @app.command()
@@ -19,16 +55,28 @@ def generate(config: Path = Path("configs/generation.yml")) -> None:
     tables = DatasetFactory(generation_config).generate()
     counts = resolve_scenario_counts(generation_config, generation_config.volumes.transactions)
     ScenarioInjector(generation_config).inject(tables, counts)
+    noise_summary = NoiseInjector(generation_config).inject(tables)
     write_dataset(tables, generation_config.output_dir)
-    write_manifest(build_manifest(generation_config, tables, counts), generation_config.output_dir)
+    write_manifest(build_manifest(generation_config, tables, counts, noise_summary), generation_config.output_dir)
     typer.echo(f"Dataset genere dans {generation_config.output_dir}")
 
 
 @app.command()
-def load(data: Path = Path("data/generated"), reset: bool = False) -> None:
+def load(data: Path = Path("data/generated"), reset: bool = False, env_file: Path = Path(".env")) -> None:
     if not data.exists():
         raise typer.BadParameter(f"Dossier introuvable: {data}")
-    typer.echo("Chargement Neo4j a coder dans src/conflict_detector/graph")
+    driver = None
+    try:
+        tables = clean_tables(read_input_tables(data))
+        driver = get_driver(env_file=env_file)
+        load_full_graph(driver, tables, reset=reset)
+    except Exception as error:
+        typer.echo(f"Chargement Neo4j impossible: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    finally:
+        if driver is not None:
+            driver.close()
+    typer.echo(f"Noeuds charges dans Neo4j depuis {data}")
 
 
 @app.command()
@@ -54,5 +102,15 @@ def export(output: Path = Path("output")) -> None:
 
 
 @app.command()
-def reset() -> None:
-    typer.echo("Reset Neo4j a coder dans src/conflict_detector/graph/schema.py")
+def reset(env_file: Path = Path(".env")) -> None:
+    driver = None
+    try:
+        driver = get_driver(env_file=env_file)
+        clear_graph(driver)
+    except Exception as error:
+        typer.echo(f"Reset Neo4j impossible: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    finally:
+        if driver is not None:
+            driver.close()
+    typer.echo("Graphe Neo4j vide")

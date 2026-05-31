@@ -4,6 +4,7 @@ import typer
 
 from conflict_detector.generation.config import GenerationConfig, resolve_scenario_counts
 from conflict_detector.generation.factory import DatasetFactory
+from conflict_detector.generation.noise import NoiseInjector
 from conflict_detector.generation.scenario_injector import ScenarioInjector
 from conflict_detector.generation.writer import build_manifest, write_dataset, write_manifest
 from conflict_detector.settings import load_generation_config
@@ -15,8 +16,9 @@ def main(config: Path = Path("configs/generation.yml")) -> None:
     tables = DatasetFactory(generation_config).generate()
     counts = resolve_scenario_counts(generation_config, generation_config.volumes.transactions)
     ScenarioInjector(generation_config).inject(tables, counts)
+    noise_summary = NoiseInjector(generation_config).inject(tables)
     write_dataset(tables, generation_config.output_dir)
-    write_manifest(build_manifest(generation_config, tables, counts), generation_config.output_dir)
+    write_manifest(build_manifest(generation_config, tables, counts, noise_summary), generation_config.output_dir)
 
 
 if __name__ == "__main__":

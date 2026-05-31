@@ -16,3 +16,11 @@ def validate_iban(value: str) -> bool:
 
 def validate_siren(value: str) -> bool:
     return bool(re.match(r"^\d{9}$", value))
+
+
+def validate_email(value: str) -> bool:
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value))
+
+
+def validate_phone(value: str) -> bool:
+    return bool(re.match(r"^0\d{9}$", value))

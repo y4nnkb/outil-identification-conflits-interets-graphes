@@ -45,3 +45,44 @@ def test_clean_tables_normalizes_values_and_removes_orphan_transactions() -> Non
     assert cleaned["fournisseurs"].loc[0, "siren_norm"] == "123456789"
     assert list(cleaned["transactions"]["id_transaction"]) == ["TRX001"]
     assert "email_norm" not in employes.columns
+
+
+def test_clean_tables_empties_corrupted_shared_attributes() -> None:
+    employes = pd.DataFrame(
+        [
+            {
+                "id_employe": "EMP001",
+                "email": "email-corrompu",
+                "telephone": "abc",
+                "adresse": "",
+                "iban": "iban-corrompu",
+                "nom": "Dupont",
+            }
+        ]
+    )
+    fournisseurs = pd.DataFrame(
+        [
+            {
+                "id_fournisseur": "FOU001",
+                "email": "fournisseur-corrompu",
+                "telephone": "123",
+                "adresse": "",
+                "iban": "iban-corrompu",
+                "siren": "siren-corrompu",
+                "nom": "Fournisseur",
+            }
+        ]
+    )
+    transactions = pd.DataFrame(
+        [{"id_transaction": "TRX001", "id_employe": "EMP001", "id_fournisseur": "FOU001"}]
+    )
+
+    cleaned = clean_tables({"employes": employes, "fournisseurs": fournisseurs, "transactions": transactions})
+
+    assert cleaned["employes"].loc[0, "email_norm"] == ""
+    assert cleaned["employes"].loc[0, "telephone_norm"] == ""
+    assert cleaned["employes"].loc[0, "iban_norm"] == ""
+    assert cleaned["fournisseurs"].loc[0, "email_norm"] == ""
+    assert cleaned["fournisseurs"].loc[0, "telephone_norm"] == ""
+    assert cleaned["fournisseurs"].loc[0, "iban_norm"] == ""
+    assert cleaned["fournisseurs"].loc[0, "siren_norm"] == ""

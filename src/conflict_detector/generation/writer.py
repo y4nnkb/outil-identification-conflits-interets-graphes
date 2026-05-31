@@ -28,7 +28,12 @@ def write_manifest(payload: dict, output_dir: str | Path) -> None:
         json.dump(payload, file, ensure_ascii=False, indent=2)
 
 
-def build_manifest(config: GenerationConfig, tables: dict[str, list[dict]], scenario_counts: dict[str, int]) -> dict:
+def build_manifest(
+    config: GenerationConfig,
+    tables: dict[str, list[dict]],
+    scenario_counts: dict[str, int],
+    noise_summary: dict[str, int] | None = None,
+) -> dict:
     injected_counts = Counter(row["scenario_id"] for row in tables.get("scenario_labels", []))
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -38,5 +43,6 @@ def build_manifest(config: GenerationConfig, tables: dict[str, list[dict]], scen
         "generated_rows": {name: len(rows) for name, rows in tables.items()},
         "scenario_counts_requested": scenario_counts,
         "scenario_counts_injected": dict(sorted(injected_counts.items())),
+        "noise_injected": noise_summary or {},
         "config": config.model_dump(),
     }

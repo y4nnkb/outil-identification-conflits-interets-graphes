@@ -1,9 +1,6 @@
-<<<<<<< HEAD
 from datetime import date
 
-=======
->>>>>>> 9c68acd (Ajout hierarchie employes a 3 niveaux et debut du nettoyage)
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class DateRangeConfig(BaseModel):
@@ -157,26 +154,20 @@ class GenerationConfig(BaseModel):
     date_range: DateRangeConfig
     volumes: VolumeConfig
     amounts: AmountConfig
-<<<<<<< HEAD
-    transaction_parameters: TransactionParametersConfig = TransactionParametersConfig()
-=======
+    transaction_parameters: TransactionParametersConfig = Field(default_factory=TransactionParametersConfig)
+    scenario_parameters: ScenarioParametersConfig = Field(default_factory=ScenarioParametersConfig)
+    scenario_mix: dict[str, ScenarioMixItem]
+    noise: NoiseConfig
     team_size_min: int = 4
     team_size_max: int = 6
     responsable_garde_equipe: bool = False
->>>>>>> 9c68acd (Ajout hierarchie employes a 3 niveaux et debut du nettoyage)
-    scenario_parameters: ScenarioParametersConfig = ScenarioParametersConfig()
-    scenario_mix: dict[str, ScenarioMixItem]
-    noise: NoiseConfig
 
     @model_validator(mode="after")
-    def verifier_team_size(self) -> "GenerationConfig":
-        if self.team_size_min > self.team_size_max:
-            raise ValueError(
-                f"team_size_min ({self.team_size_min}) doit etre <= "
-                f"team_size_max ({self.team_size_max})."
-            )
+    def validate_team_size(self) -> "GenerationConfig":
         if self.team_size_min < 1:
-            raise ValueError("team_size_min doit etre >= 1.")
+            raise ValueError("team_size_min doit etre >= 1")
+        if self.team_size_min > self.team_size_max:
+            raise ValueError("team_size_min doit etre inferieur ou egal a team_size_max")
         return self
 
 
