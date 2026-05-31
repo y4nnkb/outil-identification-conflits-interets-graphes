@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 from datetime import date
 
+=======
+>>>>>>> 9c68acd (Ajout hierarchie employes a 3 niveaux et debut du nettoyage)
 from pydantic import BaseModel, model_validator
 
 
@@ -154,10 +157,27 @@ class GenerationConfig(BaseModel):
     date_range: DateRangeConfig
     volumes: VolumeConfig
     amounts: AmountConfig
+<<<<<<< HEAD
     transaction_parameters: TransactionParametersConfig = TransactionParametersConfig()
+=======
+    team_size_min: int = 4
+    team_size_max: int = 6
+    responsable_garde_equipe: bool = False
+>>>>>>> 9c68acd (Ajout hierarchie employes a 3 niveaux et debut du nettoyage)
     scenario_parameters: ScenarioParametersConfig = ScenarioParametersConfig()
     scenario_mix: dict[str, ScenarioMixItem]
     noise: NoiseConfig
+
+    @model_validator(mode="after")
+    def verifier_team_size(self) -> "GenerationConfig":
+        if self.team_size_min > self.team_size_max:
+            raise ValueError(
+                f"team_size_min ({self.team_size_min}) doit etre <= "
+                f"team_size_max ({self.team_size_max})."
+            )
+        if self.team_size_min < 1:
+            raise ValueError("team_size_min doit etre >= 1.")
+        return self
 
 
 def resolve_scenario_counts(config: GenerationConfig, base_total: int) -> dict[str, int]:

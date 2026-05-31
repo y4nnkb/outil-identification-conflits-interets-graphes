@@ -14,6 +14,15 @@ class DatasetFactory:
         self.fake.seed_instance(config.seed)
 
     def generate_clean_entities(self) -> dict[str, list[dict]]:
+        nb_employes = self.config.volumes.employes
+        DEPARTEMENTS = ["Achats", "Finance", "Juridique", "Operations"]
+
+        # 1. Repartir les employes aleatoirement entre les 4 departements
+        affectations_dep = [
+            self.random.choice(DEPARTEMENTS) for _ in range(nb_employes)
+        ]
+
+        # 2. Creer les employes (tous en poste de base au depart)
         employes = [
             {
                 "id_employe": f"EMP{i:04d}",
@@ -23,16 +32,66 @@ class DatasetFactory:
                 "telephone": self.fake.phone_number(),
                 "adresse": self.fake.address().replace("\n", ", "),
                 "iban": self.fake.iban(),
-                "poste": self.random.choice(["Acheteur", "Comptable", "CFO", "Manager", "Controleur"]),
-                "departement": self.random.choice(["Achats", "Finance", "Juridique", "Operations"]),
+                "poste": self.random.choice(["Acheteur", "Comptable", "Controleur"]),
+                "departement": affectations_dep[i - 1],
                 "manager_id": "",
                 "date_embauche": self._date(),
                 "statut": "ACTIF",
             }
-            for i in range(1, self.config.volumes.employes + 1)
+            for i in range(1, nb_employes + 1)
         ]
-        for employe in employes:
-            employe["manager_id"] = self.random.choice(employes)["id_employe"]
+
+        # 3. Former des equipes par departement et nommer un manager par equipe
+        for dep in DEPARTEMENTS:
+            membres_dep = [e for e in employes if e["departement"] == dep]
+            self.random.shuffle(membres_dep)
+
+            managers_du_dep = []
+            index = 0
+            while index < len(membres_dep):
+                taille = self.random.randint(
+                    self.config.team_size_min, self.config.team_size_max
+                )
+                equipe = membres_dep[index:index + taille]
+                index += taille
+
+                if not equipe:
+                    break
+
+                manager = equipe[0]
+                manager["poste"] = "Manager"
+                manager["manager_id"] = ""
+                managers_du_dep.append(manager)
+
+                for membre in equipe[1:]:
+                    membre["manager_id"] = manager["id_employe"]
+
+            # 4. Nommer un responsable du departement parmi les managers
+            if managers_du_dep:
+                responsable = self.random.choice(managers_du_dep)
+                responsable["poste"] = "Responsable"
+                responsable["manager_id"] = ""
+
+                autres_managers = [
+                    m for m in managers_du_dep
+                    if m["id_employe"] != responsable["id_employe"]
+                ]
+                for manager in autres_managers:
+                    manager["manager_id"] = responsable["id_employe"]
+
+                # Hierarchie stricte a 3 niveaux : le responsable ne pilote
+                # plus de collaborateurs en direct
+                if not self.config.responsable_garde_equipe and autres_managers:
+                    anciens_subordonnes = [
+                        e for e in employes
+                        if e["manager_id"] == responsable["id_employe"]
+                        and e["poste"] not in ("Manager", "Responsable")
+                    ]
+                    for subordonne in anciens_subordonnes:
+                        nouveau_manager = self.random.choice(autres_managers)
+                        subordonne["manager_id"] = nouveau_manager["id_employe"]
+
+        # 5. Generer les fournisseurs (inchange)
         fournisseurs = [
             {
                 "id_fournisseur": f"FOU{i:04d}",
@@ -54,7 +113,7 @@ class DatasetFactory:
             for i in range(1, self.config.volumes.fournisseurs + 1)
         ]
         return {"employes": employes, "fournisseurs": fournisseurs}
-
+    
     def generate_clean_transactions(self, tables: dict[str, list[dict]]) -> dict[str, list[dict]]:
         transactions = []
         nb_contrats = self._contract_count()

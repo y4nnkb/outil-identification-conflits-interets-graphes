@@ -103,3 +103,8 @@ noise:
   duplicate_rate_percent: 1
   missing_value_rate_percent: 2
   typo_rate_percent: 1
+
+
+team_size_min: 4
+team_size_max: 6
+responsable_garde_equipe: false
