@@ -30,3 +30,7 @@ def test_evaluate_alerts_matches_synthetic_ground_truth() -> None:
     assert result["matched_scenario_cases"] == 1
     assert result["matched_alerts"] == 1
     assert result["recall_estimate"] == 0.5
+    assert result["precision_estimate"] == 0.5
+    assert result["f1_score"] == 0.5
+    identity_metrics = next(row for row in result["by_scenario"] if row["scenario_id"] == "identity_match")
+    assert identity_metrics["f1_score"] == 1.0

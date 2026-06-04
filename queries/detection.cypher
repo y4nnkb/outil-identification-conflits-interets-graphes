@@ -30,7 +30,7 @@ MATCH (e:Employe)-[employeeRel]->(attribute)<-[supplierRel]-(f:Fournisseur)
 WHERE type(employeeRel) = type(supplierRel)
   AND type(employeeRel) IN ['A_EMAIL', 'A_TELEPHONE', 'A_ADRESSE', 'A_IBAN', 'A_NOM']
 WITH e, f, collect(DISTINCT replace(type(employeeRel), 'A_', '')) AS shared_attributes
-WHERE size(shared_attributes) = 2
+WHERE size(shared_attributes) >= 2
 MATCH (e)-[:A_EFFECTUE]->(t:Transaction)-[:VERS]->(f)
 RETURN e.id_employe AS employe, f.id_fournisseur AS fournisseur, shared_attributes, count(DISTINCT t) AS transactions
 LIMIT 50;

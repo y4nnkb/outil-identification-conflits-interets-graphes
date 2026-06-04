@@ -5,16 +5,19 @@ node {
 node.Employe {
   caption: "{display_label}";
   color: #68bdf6;
+  size: 42px;
 }
 
 node.Fournisseur {
   caption: "{display_label}";
   color: #ff928c;
+  size: 42px;
 }
 
 node.Transaction {
   caption: "{display_label}";
   color: #65d98c;
+  size: 34px;
 }
 
 node.Adresse {
@@ -57,6 +60,43 @@ node.Commande {
   color: #90caf9;
 }
 
+node.Scenario {
+  caption: "{name}";
+  color: #ce93d8;
+  size: 48px;
+}
+
+node.ScenarioCase {
+  caption: "{case_id}";
+  color: #fff176;
+  size: 38px;
+}
+
 relationship {
   caption: "<type>";
+}
+
+relationship.A_EFFECTUE {
+  caption: "effectue";
+  color: #2e7d32;
+}
+
+relationship.VERS {
+  caption: "vers";
+  color: #2e7d32;
+}
+
+relationship.MANAGE {
+  caption: "manage";
+  color: #1565c0;
+}
+
+relationship.IMPLIQUE_DANS {
+  caption: "implique";
+  color: #f9a825;
+}
+
+relationship.TYPE_SCENARIO {
+  caption: "type";
+  color: #6a1b9a;
 }

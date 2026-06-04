@@ -91,9 +91,10 @@ def detect(
     driver = None
     try:
         driver = get_driver(env_file=env_file)
+        config = load_scoring_config(scoring_config)
         alerts = [detection_result_to_dict(result) for result in run_default_rules(driver)]
-        alerts = score_alerts(alerts, load_scoring_config(scoring_config))
-        export_report_bundle(alerts, output)
+        alerts = score_alerts(alerts, config)
+        export_report_bundle(alerts, output, config)
     except Exception as error:
         typer.echo(f"Detection impossible: {error}", err=True)
         raise typer.Exit(code=1) from error
@@ -120,9 +121,10 @@ def run(
         tables = clean_tables(read_input_tables(data))
         driver = get_driver(env_file=env_file)
         load_full_graph(driver, tables, reset=reset)
+        config = load_scoring_config(scoring_config)
         alerts = [detection_result_to_dict(result) for result in run_default_rules(driver)]
-        alerts = score_alerts(alerts, load_scoring_config(scoring_config))
-        export_report_bundle(alerts, output)
+        alerts = score_alerts(alerts, config)
+        export_report_bundle(alerts, output, config)
     except Exception as error:
         typer.echo(f"Pipeline impossible: {error}", err=True)
         raise typer.Exit(code=1) from error
@@ -155,7 +157,7 @@ def evaluate(
     result = evaluate_alert_file(alerts_file, labels_file, output_file)
     typer.echo(
         f"Evaluation exportee dans {output_file} "
-        f"(recall={result['recall_estimate']}, precision={result['precision_estimate']})"
+        f"(recall={result['recall_estimate']}, precision={result['precision_estimate']}, f1={result['f1_score']})"
     )
 
 

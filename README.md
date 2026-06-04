@@ -154,6 +154,10 @@ Résultats générés :
 - `output/alerts.csv`
 - `output/alerts.json`
 - `output/summary.json`
+- `output/alerts_by_employee.csv`
+- `output/alerts_by_employee.json`
+- `output/report.html`
+- `output/scenarios.html`
 - `output/evaluation.json`
 
 `evaluation.json` n'est produit que si `data/generated/scenario_labels.csv` existe.
@@ -258,6 +262,8 @@ Sections importantes :
 - `noise` : doublons, valeurs manquantes et fautes volontaires.
 
 Quand `count` est renseigné dans `scenario_mix`, il prend le dessus sur `percent`.
+
+Le bruit reste appliqué aux données synthétiques, mais les champs qui portent explicitement un scénario injecté sont protégés. Cela permet de tester les règles de détection sans perdre un scénario uniquement parce que le générateur a vidé ou corrompu son attribut principal.
 
 ## Scénarios Injectés
 
@@ -365,14 +371,46 @@ Le scoring est configuré dans :
 configs/scoring.yml
 ```
 
+Le même fichier règle aussi la taille des tableaux du rapport :
+
+```yaml
+reporting:
+  top_alerts: 20
+  top_employees: 15
+```
+
+Les seuils de gravité sont volontairement espacés pour que `HIGH` corresponde aux alertes réellement prioritaires.
+
 ## Évaluation
 
 L'évaluation compare les alertes détectées avec `scenario_labels.csv`.
 
 - précision : part des alertes sorties qui correspondent à un scénario injecté ;
 - rappel : part des scénarios injectés retrouvés par les règles.
+- F1-score : moyenne équilibrée entre précision et rappel.
 
 Cette évaluation est utile sur les données synthétiques uniquement. Sur une base client, `scenario_labels.csv` n'existe pas et ne doit pas être utilisé.
+
+## Rapport HTML
+
+Le fichier principal pour une restitution lisible est :
+
+```text
+output/report.html
+```
+
+Les libellés métiers des scénarios affichés dans ce rapport viennent de `src/conflict_detector/domain/scenario_catalog.py`.
+
+Il contient :
+
+- les volumes d'alertes par gravité ;
+- les employés à investiguer en priorité ;
+- le top des alertes avec scénario, score, gravité, entités, lignes sources et preuves ;
+- une vue agrégée qui évite de présenter dix alertes séparées sans expliquer qu'elles concernent le même employé.
+
+Le lien `Voir la documentation des scénarios` ouvre `output/scenarios.html`, une page générée depuis le catalogue des scénarios. Elle donne le nom métier, l'identifiant technique, la définition métier et les données utilisées pour chaque scénario.
+
+Les exports `alerts_by_employee.csv` et `alerts_by_employee.json` permettent de retravailler cette agrégation dans Excel, Power BI ou un autre outil.
 
 ## Visualisation Neo4j Browser
 
@@ -404,6 +442,67 @@ Pour afficher des noms lisibles dans le graphe :
 
 Le style force l'affichage de `display_label`, par exemple `EMP0001 - Lucie Marie` ou `TRX00042 - FACTURE`.
 
+## Démo Client
+
+Préparation avant la démonstration :
+
+Ouvrir Docker Desktop et attendre que l'engine soit démarré, puis lancer :
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d neo4j
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e .
+conflict-detector run --data data/generated --output output --reset
+```
+
+Si les CSV n'existent pas encore :
+
+```powershell
+conflict-detector generate --config configs/generation.yml
+conflict-detector run --data data/generated --output output --reset
+```
+
+Ouvrir ensuite le rapport HTML :
+
+```text
+output/report.html
+```
+
+Neo4j Browser reste disponible pour explorer ponctuellement un cas :
+
+```text
+http://localhost:7474
+```
+
+Identifiants par défaut :
+
+```text
+user: neo4j
+password: password123
+```
+
+Déroulé conseillé :
+
+1. Ouvrir `output/report.html`.
+2. Présenter les indicateurs globaux du haut du rapport.
+3. Montrer le tableau des employés à investiguer en priorité.
+4. Expliquer que chaque ligne agrège plusieurs alertes autour du même employé et liste les fournisseurs concernés.
+5. Montrer le top des alertes prioritaires avec score, gravité, entités, lignes sources et preuves.
+6. Ouvrir `output/alerts_by_employee.csv` si le client veut une vue exportable.
+7. Finir par `output/evaluation.json` pour expliquer la performance sur données synthétiques.
+
+Pendant la démo, ne pas présenter `ScenarioCase` comme une aide à la détection. Ces noeuds servent uniquement sur les données synthétiques pour vérifier que les règles retrouvent bien les scénarios injectés. Sur une base client réelle, ils n'existent pas.
+
+Message métier à faire passer :
+
+- les données de départ sont classiques : employés, fournisseurs, transactions ;
+- le graphe révèle les liens faibles qui sont difficiles à voir en tableau ;
+- les règles Cypher transforment ces liens en alertes ;
+- le scoring permet de prioriser les investigations ;
+- l'analyste peut ouvrir une alerte et comprendre pourquoi elle est remontée.
+
 ## Tests
 
 ```powershell
@@ -429,6 +528,8 @@ Présent :
 - évaluation synthétique ;
 - style et requêtes de visualisation Neo4j Browser ;
 - tests automatisés.
+
+Sur la configuration par défaut, l'évaluation synthétique retrouve actuellement environ 98 % des scénarios injectés. Les écarts restants concernent surtout les scénarios où plusieurs motifs peuvent se recouvrir naturellement dans le graphe.
 
 À améliorer ensuite :
 

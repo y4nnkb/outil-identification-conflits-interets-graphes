@@ -11,6 +11,7 @@ def test_normalize_iban_removes_spaces() -> None:
 
 def test_normalize_phone_keeps_ten_digits() -> None:
     assert normalize_phone("+33 6 12 34 56 78") == "0612345678"
+    assert normalize_phone("+33 (0)7 79 70 56 60") == "0779705660"
 
 
 def test_normalize_email_lowercases_and_strips() -> None:

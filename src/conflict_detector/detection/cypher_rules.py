@@ -149,7 +149,7 @@ DOUBLE_MATCH_QUERY = """
         f,
         collect(DISTINCT replace(type(employeeRel), 'A_', '')) AS shared_attributes,
         collect(DISTINCT attribute.value) AS shared_values
-    WHERE size(shared_attributes) = 2
+    WHERE size(shared_attributes) >= 2
     OPTIONAL MATCH (e)-[:A_EFFECTUE]->(t:Transaction)-[:VERS]->(f)
     WITH e, f, shared_attributes, shared_values, count(DISTINCT t) AS transaction_count, collect(DISTINCT t.id_transaction)[0..10] AS source_rows
     WHERE transaction_count > 0

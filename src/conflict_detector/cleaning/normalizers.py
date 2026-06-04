@@ -27,6 +27,8 @@ def normalize_siren(value: object) -> str:
 
 def normalize_phone(value: object) -> str:
     digits = re.sub(r"\D", "", str(value or ""))
+    if digits.startswith("330") and len(digits) == 12:
+        digits = digits[2:]
     if digits.startswith("33") and len(digits) == 11:
         digits = "0" + digits[2:]
     return digits[:10]

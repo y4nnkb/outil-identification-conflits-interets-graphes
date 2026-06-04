@@ -27,22 +27,26 @@ def evaluate_alerts(alerts: list[dict], scenario_labels: pd.DataFrame) -> dict:
     requested_by_scenario = Counter(case["scenario_id"] for case in cases)
     matched_by_scenario = Counter(case["scenario_id"] for case in cases if case["case_id"] in matched_case_ids)
     alert_counts = Counter(str(alert.get("scenario_id")) for alert in alerts)
+    matched_alert_counts = Counter()
+    for alert in alerts:
+        alert_entities = _alert_entity_ids(alert)
+        scenario_id = str(alert.get("scenario_id"))
+        if any(case["scenario_id"] == scenario_id and _is_match(alert_entities, case["entity_ids"]) for case in cases):
+            matched_alert_counts[scenario_id] += 1
+
+    precision = _ratio(matched_alerts, len(alerts))
+    recall = _ratio(len(matched_case_ids), len(cases))
 
     return {
         "total_scenario_cases": len(cases),
         "matched_scenario_cases": len(matched_case_ids),
         "total_alerts": len(alerts),
         "matched_alerts": matched_alerts,
-        "precision_estimate": _ratio(matched_alerts, len(alerts)),
-        "recall_estimate": _ratio(len(matched_case_ids), len(cases)),
+        "precision_estimate": precision,
+        "recall_estimate": recall,
+        "f1_score": _f1(precision, recall),
         "by_scenario": [
-            {
-                "scenario_id": scenario_id,
-                "expected_cases": requested_by_scenario[scenario_id],
-                "matched_cases": matched_by_scenario[scenario_id],
-                "alerts": alert_counts[scenario_id],
-                "recall_estimate": _ratio(matched_by_scenario[scenario_id], requested_by_scenario[scenario_id]),
-            }
+            _scenario_metrics(scenario_id, requested_by_scenario, matched_by_scenario, alert_counts, matched_alert_counts)
             for scenario_id in sorted(requested_by_scenario)
         ],
     }
@@ -89,3 +93,29 @@ def _ratio(numerator: int, denominator: int) -> float:
     if denominator == 0:
         return 0.0
     return round(numerator / denominator, 4)
+
+
+def _f1(precision: float, recall: float) -> float:
+    if precision + recall == 0:
+        return 0.0
+    return round(2 * precision * recall / (precision + recall), 4)
+
+
+def _scenario_metrics(
+    scenario_id: str,
+    requested_by_scenario: Counter,
+    matched_by_scenario: Counter,
+    alert_counts: Counter,
+    matched_alert_counts: Counter,
+) -> dict:
+    precision = _ratio(matched_alert_counts[scenario_id], alert_counts[scenario_id])
+    recall = _ratio(matched_by_scenario[scenario_id], requested_by_scenario[scenario_id])
+    return {
+        "scenario_id": scenario_id,
+        "expected_cases": requested_by_scenario[scenario_id],
+        "matched_cases": matched_by_scenario[scenario_id],
+        "alerts": alert_counts[scenario_id],
+        "precision_estimate": precision,
+        "recall_estimate": recall,
+        "f1_score": _f1(precision, recall),
+    }

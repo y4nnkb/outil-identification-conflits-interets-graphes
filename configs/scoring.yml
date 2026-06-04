@@ -23,5 +23,9 @@ depth_penalty:
   3: -2
   4: -3
 severity:
-  high: 12
-  medium: 7
+  high: 18
+  medium: 10
+
+reporting:
+  top_alerts: 20
+  top_employees: 15
