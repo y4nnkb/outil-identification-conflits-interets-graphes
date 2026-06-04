@@ -6,8 +6,10 @@ from pathlib import Path
 from conflict_detector.reporting.html_report import (
     aggregate_alerts_by_employee,
     render_employee_detail_pages,
+    render_executive_summary,
     render_html_report,
     render_scenario_documentation,
+    render_supplier_detail_pages,
 )
 
 
@@ -63,9 +65,11 @@ def export_report_bundle(alerts: list[dict], output_dir: str | Path, config: dic
     export_alerts_json(alerts, target / "alerts.json")
     export_summary_json(alerts, target / "summary.json")
     export_employee_aggregation(alerts, target)
+    render_executive_summary(alerts, target / "executive_summary.html", config)
     render_html_report(alerts, target / "report.html", config)
     render_scenario_documentation(target / "scenarios.html")
     render_employee_detail_pages(alerts, target, config)
+    render_supplier_detail_pages(alerts, target, config)
 
 
 def _csv_value(value: object) -> object:

@@ -156,9 +156,11 @@ Résultats générés :
 - `output/summary.json`
 - `output/alerts_by_employee.csv`
 - `output/alerts_by_employee.json`
+- `output/executive_summary.html`
 - `output/report.html`
 - `output/scenarios.html`
 - `output/employees/`
+- `output/suppliers/`
 - `output/evaluation.json`
 
 `evaluation.json` n'est produit que si `data/generated/scenario_labels.csv` existe.
@@ -400,6 +402,12 @@ Le fichier principal pour une restitution lisible est :
 output/report.html
 ```
 
+La page la plus courte pour une restitution rapide est :
+
+```text
+output/executive_summary.html
+```
+
 Les libellés métiers des scénarios affichés dans ce rapport viennent de `src/conflict_detector/domain/scenario_catalog.py`.
 
 Il contient :
@@ -411,11 +419,17 @@ Il contient :
 - des filtres par recherche, gravité et scénario ;
 - un tri interactif des colonnes ;
 - des boutons pour afficher progressivement plus de lignes ;
-- un lien sur chaque employé vers une page dédiée listant toutes ses alertes.
+- un lien sur chaque employé vers une page dédiée listant toutes ses alertes ;
+- un lien sur chaque fournisseur vers une page dédiée listant ses alertes, les employés concernés et les preuves associées ;
+- une explication métier de la raison de remontée de chaque alerte.
 
 Le lien `Voir la documentation des scénarios` ouvre `output/scenarios.html`, une page générée depuis le catalogue des scénarios. Elle donne le nom métier, l'identifiant technique, la définition métier et les données utilisées pour chaque scénario.
 
 Les pages `output/employees/<id_employe>.html` détaillent toutes les alertes d'un employé, les fournisseurs concernés, les preuves et la raison de remontée de chaque alerte.
+
+Les pages `output/suppliers/<id_fournisseur>.html` détaillent toutes les alertes d'un fournisseur, les employés concernés, les preuves et la raison de remontée de chaque alerte.
+
+La page `output/executive_summary.html` donne une synthèse courte : volumes d'alertes, employés prioritaires, scénarios les plus fréquents, fournisseurs les plus cités et top 5 des alertes.
 
 Les exports `alerts_by_employee.csv` et `alerts_by_employee.json` permettent de retravailler cette agrégation dans Excel, Power BI ou un autre outil.
 
@@ -492,15 +506,17 @@ password: password123
 
 Déroulé conseillé :
 
-1. Ouvrir `output/report.html`.
-2. Présenter les indicateurs globaux du haut du rapport.
-3. Montrer le tableau des employés à investiguer en priorité.
-4. Cliquer sur un employé pour ouvrir sa page dédiée.
-5. Expliquer que chaque ligne agrège plusieurs alertes autour du même employé et liste les fournisseurs concernés.
-6. Utiliser les filtres du rapport pour isoler une gravité ou un scénario.
-7. Montrer le top des alertes prioritaires avec score, gravité, entités, lignes sources, explication et preuves.
-8. Ouvrir `output/alerts_by_employee.csv` si le client veut une vue exportable.
-9. Finir par `output/evaluation.json` pour expliquer la performance sur données synthétiques.
+1. Ouvrir `output/executive_summary.html`.
+2. Présenter les volumes, les employés prioritaires et les fournisseurs les plus cités.
+3. Ouvrir `output/report.html` pour passer au détail.
+4. Montrer le tableau des employés à investiguer en priorité.
+5. Cliquer sur un employé pour ouvrir sa page dédiée.
+6. Cliquer sur un fournisseur pour ouvrir sa page dédiée.
+7. Expliquer que chaque ligne agrège plusieurs alertes autour du même employé ou fournisseur et liste les entités concernées.
+8. Utiliser les filtres du rapport pour isoler une gravité ou un scénario.
+9. Montrer le top des alertes prioritaires avec score, gravité, entités, lignes sources, explication métier et preuves.
+10. Ouvrir `output/alerts_by_employee.csv` si le client veut une vue exportable.
+11. Finir par `output/evaluation.json` pour expliquer la performance sur données synthétiques.
 
 Pendant la démo, ne pas présenter `ScenarioCase` comme une aide à la détection. Ces noeuds servent uniquement sur les données synthétiques pour vérifier que les règles retrouvent bien les scénarios injectés. Sur une base client réelle, ils n'existent pas.
 

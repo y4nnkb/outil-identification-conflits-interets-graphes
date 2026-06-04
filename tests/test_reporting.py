@@ -61,9 +61,11 @@ def test_render_html_report_writes_interactive_alerts(tmp_path) -> None:
     html = target.read_text(encoding="utf-8")
     assert "Rapport d'alertes" in html
     assert "Correspondance d&#x27;identités (identity_match)" in html
+    assert "Voir la synthèse exécutive" in html
     assert "Voir la documentation des scénarios" in html
     assert "Attribut commun" in html
     assert "Pourquoi l'alerte ?" in html
+    assert "partagent iban" in html
     assert "Voir les preuves" in html
     assert "employees/EMP001.html" in html
     assert "data-search-input" in html
@@ -125,9 +127,24 @@ def test_export_report_bundle_writes_employee_detail_pages(tmp_path) -> None:
 
     export_report_bundle(alerts, tmp_path, {"reporting": {"top_alerts": 1, "top_employees": 1}})
 
+    summary = tmp_path / "executive_summary.html"
+    assert summary.exists()
+    summary_html = summary.read_text(encoding="utf-8")
+    assert "Synthèse exécutive" in summary_html
+    assert "Priorités d'investigation" in summary_html
+    assert "Scénarios les plus fréquents" in summary_html
+
     detail = tmp_path / "employees" / "EMP001.html"
     assert detail.exists()
     html = detail.read_text(encoding="utf-8")
     assert "Alice Martin" in html
     assert "Alpha" in html
+    assert "../suppliers/FOU001.html" in html
     assert "Retour au rapport principal" in html
+
+    supplier_detail = tmp_path / "suppliers" / "FOU001.html"
+    assert supplier_detail.exists()
+    supplier_html = supplier_detail.read_text(encoding="utf-8")
+    assert "Alpha" in supplier_html
+    assert "Alice Martin" in supplier_html
+    assert "../employees/EMP001.html" in supplier_html

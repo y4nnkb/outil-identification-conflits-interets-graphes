@@ -1,4 +1,5 @@
 from html import escape
+from collections import Counter
 from pathlib import Path
 from statistics import mean
 
@@ -48,6 +49,10 @@ def render_scenario_documentation(path: str | Path) -> None:
     Path(path).write_text(_scenario_documentation_page(), encoding="utf-8")
 
 
+def render_executive_summary(alerts: list[dict], path: str | Path, config: dict | None = None) -> None:
+    Path(path).write_text(_executive_summary_page(alerts), encoding="utf-8")
+
+
 def render_employee_detail_pages(alerts: list[dict], output_dir: str | Path, config: dict | None = None) -> None:
     target = Path(output_dir) / "employees"
     target.mkdir(parents=True, exist_ok=True)
@@ -62,6 +67,24 @@ def render_employee_detail_pages(alerts: list[dict], output_dir: str | Path, con
         rows = sorted(employee_alerts, key=lambda alert: (-float(alert.get("score") or 0), str(alert.get("scenario_id"))))
         (target / f"{employee_id}.html").write_text(
             _employee_detail_page(employee_id, labels[employee_id], rows),
+            encoding="utf-8",
+        )
+
+
+def render_supplier_detail_pages(alerts: list[dict], output_dir: str | Path, config: dict | None = None) -> None:
+    target = Path(output_dir) / "suppliers"
+    target.mkdir(parents=True, exist_ok=True)
+    grouped: dict[str, list[dict]] = {}
+    labels: dict[str, str] = {}
+    for alert in alerts:
+        for entity in _supplier_entities(alert):
+            supplier_id = _entity_id(entity)
+            grouped.setdefault(supplier_id, []).append(alert)
+            labels.setdefault(supplier_id, str(entity.get("label") or supplier_id))
+    for supplier_id, supplier_alerts in grouped.items():
+        rows = sorted(supplier_alerts, key=lambda alert: (-float(alert.get("score") or 0), str(alert.get("scenario_id"))))
+        (target / f"{supplier_id}.html").write_text(
+            _supplier_detail_page(supplier_id, labels[supplier_id], rows),
             encoding="utf-8",
         )
 
@@ -117,7 +140,7 @@ def _report_page(alerts: list[dict], employee_rows: list[dict], alert_rows: list
 </head>
 <body>
   <h1>Rapport d'alertes - conflits d'intérêts</h1>
-  <p class="muted">Rapport généré automatiquement à partir des alertes détectées et scorées. <a href="scenarios.html">Voir la documentation des scénarios</a>.</p>
+  <p class="muted">Rapport généré automatiquement à partir des alertes détectées et scorées. <a href="executive_summary.html">Voir la synthèse exécutive</a> · <a href="scenarios.html">Voir la documentation des scénarios</a>.</p>
   <section class="kpis">
     <div class="kpi">Alertes totales<strong>{total}</strong></div>
     <div class="kpi">Gravité haute<strong>{high}</strong></div>
@@ -155,10 +178,78 @@ def _employee_detail_page(employee_id: str, employee_label: str, alerts: list[di
     <div class="kpi">Gravité moyenne<strong>{medium}</strong></div>
     <div class="kpi">Fournisseurs liés<strong>{len(suppliers)}</strong></div>
   </section>
-  <p><strong>Fournisseurs concernés :</strong> {escape(', '.join(suppliers) or 'Aucun fournisseur identifié')}</p>
+  <p><strong>Fournisseurs concernés :</strong> {_supplier_links(suppliers, "../suppliers") or 'Aucun fournisseur identifié'}</p>
   {_filters()}
   <h2>Alertes liées à cet employé</h2>
-  {_alert_table(alerts, len(alerts))}
+  {_alert_table(alerts, len(alerts), "../")}
+  {_script()}
+</body>
+</html>
+"""
+
+
+def _supplier_detail_page(supplier_id: str, supplier_label: str, alerts: list[dict]) -> str:
+    high = sum(1 for alert in alerts if alert.get("severity") == "HIGH")
+    medium = sum(1 for alert in alerts if alert.get("severity") == "MEDIUM")
+    employees = sorted({_employee_label(entity) for alert in alerts for entity in _employee_entities(alert)})
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Alertes fournisseur - {escape(supplier_id)}</title>
+  {_style()}
+</head>
+<body>
+  <p><a href="../report.html">Retour au rapport principal</a></p>
+  <h1>{escape(supplier_label)} <span class="muted">({escape(supplier_id)})</span></h1>
+  <section class="kpis">
+    <div class="kpi">Alertes liées<strong>{len(alerts)}</strong></div>
+    <div class="kpi">Gravité haute<strong>{high}</strong></div>
+    <div class="kpi">Gravité moyenne<strong>{medium}</strong></div>
+    <div class="kpi">Employés liés<strong>{len(employees)}</strong></div>
+  </section>
+  <p><strong>Employés concernés :</strong> {_employee_links(employees, "../employees") or 'Aucun employé identifié'}</p>
+  {_filters()}
+  <h2>Alertes liées à ce fournisseur</h2>
+  {_alert_table(alerts, len(alerts), "../")}
+  {_script()}
+</body>
+</html>
+"""
+
+
+def _executive_summary_page(alerts: list[dict]) -> str:
+    employee_rows = aggregate_alerts_by_employee(alerts)
+    alert_rows = sorted(alerts, key=lambda alert: (-float(alert.get("score") or 0), str(alert.get("scenario_id"))))
+    scenario_rows = _scenario_summary_rows(alerts)
+    supplier_rows = _supplier_summary_rows(alerts)
+    high = sum(1 for alert in alerts if alert.get("severity") == "HIGH")
+    medium = sum(1 for alert in alerts if alert.get("severity") == "MEDIUM")
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Synthèse exécutive - conflits d'intérêts</title>
+  {_style()}
+</head>
+<body>
+  <p><a href="report.html">Retour au rapport détaillé</a></p>
+  <h1>Synthèse exécutive</h1>
+  <p class="muted">Vue courte pour prioriser les investigations avant de consulter le rapport détaillé.</p>
+  <section class="kpis">
+    <div class="kpi">Alertes totales<strong>{len(alerts)}</strong></div>
+    <div class="kpi">Alertes HIGH<strong>{high}</strong></div>
+    <div class="kpi">Alertes MEDIUM<strong>{medium}</strong></div>
+    <div class="kpi">Employés concernés<strong>{len(employee_rows)}</strong></div>
+  </section>
+  <h2>Priorités d'investigation</h2>
+  {_employee_table(employee_rows[:5], 5)}
+  <h2>Scénarios les plus fréquents</h2>
+  {_simple_table(("Scénario", "Alertes", "HIGH", "MEDIUM"), scenario_rows)}
+  <h2>Fournisseurs les plus cités</h2>
+  {_simple_table(("Fournisseur", "Alertes"), supplier_rows)}
+  <h2>Top 5 alertes prioritaires</h2>
+  {_alert_table(alert_rows[:5], 5)}
   {_script()}
 </body>
 </html>
@@ -200,7 +291,7 @@ def _employee_table(rows: list[dict], initial_visible: int) -> str:
         f"<td data-sort-value=\"{row['max_score']}\">{row['max_score']}</td>"
         f"<td data-sort-value=\"{row['average_score']}\">{row['average_score']}</td>"
         f"<td>{escape(str(row['scenarios']))}</td>"
-        f"<td>{escape(str(row['suppliers']))}</td>"
+        f"<td>{_supplier_links(str(row['suppliers']).split(', '), 'suppliers')}</td>"
         "</tr>"
         for index, row in enumerate(rows)
     )
@@ -220,13 +311,13 @@ def _employee_table(rows: list[dict], initial_visible: int) -> str:
     )
 
 
-def _alert_table(rows: list[dict], initial_visible: int) -> str:
+def _alert_table(rows: list[dict], initial_visible: int, link_prefix: str = "") -> str:
     body = "".join(
         f"<tr{_row_attributes(index, initial_visible, alert.get('scenario_id'), alert.get('severity'), alert)}>"
         f"<td>{escape(_scenario_label(alert.get('scenario_id', '')))}</td>"
         f"<td data-sort-value=\"{float(alert.get('score') or 0)}\">{escape(str(alert.get('score', '')))}</td>"
         f"<td class=\"sev-{escape(str(alert.get('severity', '')))}\">{escape(str(alert.get('severity', '')))}</td>"
-        f"<td>{escape(_entities(alert))}</td>"
+        f"<td>{_entities_html(alert, link_prefix)}</td>"
         f"<td>{escape(_source_rows(alert))}</td>"
         f"<td>{escape(_alert_reason(alert))}</td>"
         f"<td>{_evidence_details(alert)}</td>"
@@ -271,6 +362,35 @@ def _table_section(table_html: str, rows: list[dict], initial_visible: int, labe
     )
 
 
+def _simple_table(headers: tuple[str, ...], rows: list[tuple[object, ...]]) -> str:
+    head = "".join(f"<th>{escape(header)}</th>" for header in headers)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{escape(str(value))}</td>" for value in row) + "</tr>"
+        for row in rows
+    )
+    return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+
+def _scenario_summary_rows(alerts: list[dict]) -> list[tuple[object, ...]]:
+    counts = Counter(str(alert.get("scenario_id", "")) for alert in alerts)
+    high_counts = Counter(str(alert.get("scenario_id", "")) for alert in alerts if alert.get("severity") == "HIGH")
+    medium_counts = Counter(str(alert.get("scenario_id", "")) for alert in alerts if alert.get("severity") == "MEDIUM")
+    return [
+        (_scenario_label(scenario_id), count, high_counts[scenario_id], medium_counts[scenario_id])
+        for scenario_id, count in counts.most_common(10)
+    ]
+
+
+def _supplier_summary_rows(alerts: list[dict]) -> list[tuple[object, ...]]:
+    counts = Counter(
+        _supplier_label(entity)
+        for alert in alerts
+        for entity in alert.get("entities", [])
+        if _entity_id(entity).startswith("FOU")
+    )
+    return counts.most_common(10)
+
+
 def _evidence_details(alert: dict) -> str:
     return f"<details><summary>Voir les preuves</summary>{_evidence_html(alert)}</details>"
 
@@ -287,23 +407,47 @@ def _evidence_html(alert: dict) -> str:
 
 
 def _alert_reason(alert: dict) -> str:
-    scenario = _scenario_name(alert.get("scenario_id"))
+    scenario_id = str(alert.get("scenario_id") or "")
+    scenario = _scenario_name(scenario_id)
     evidence = alert.get("evidence", {})
-    parts = [scenario]
-    if isinstance(evidence, dict):
-        if evidence.get("attribute"):
-            parts.append(f"attribut commun {evidence['attribute']}")
-        if evidence.get("shared_attributes"):
-            parts.append(f"attributs communs: {_format_evidence_value(evidence['shared_attributes'])}")
-        if evidence.get("transaction_count"):
-            parts.append(f"{evidence['transaction_count']} transaction(s)")
-        if evidence.get("total_amount"):
-            parts.append(f"montant total {evidence['total_amount']}")
-        if evidence.get("gift_delay_days") is not None:
-            parts.append(f"cadeau {evidence['gift_delay_days']} jour(s) avant la transaction")
-        if evidence.get("manager_id"):
-            parts.append(f"hiérarchie manager {evidence['manager_id']}")
-    return " | ".join(str(part) for part in parts)
+    if not isinstance(evidence, dict):
+        return scenario
+
+    transaction_count = evidence.get("transaction_count")
+    shared_attributes = _format_evidence_value(evidence.get("shared_attributes", ""))
+    link_types = _format_evidence_value(evidence.get("link_types", ""))
+    attribute = evidence.get("attribute")
+
+    if scenario_id == "identity_match":
+        value = evidence.get("value")
+        return f"L'employé et le fournisseur partagent {attribute or 'un identifiant'}{_value_suffix(value)} avec {transaction_count or 0} transaction(s) associée(s)."
+    if scenario_id == "direct_link":
+        return f"L'employé et le fournisseur partagent une adresse et ont {transaction_count or 0} transaction(s) entre eux."
+    if scenario_id == "double_match":
+        return f"L'employé et le fournisseur partagent deux attributs ({shared_attributes or 'non renseignés'}), ce qui rend le lien plus solide qu'une simple correspondance isolée."
+    if scenario_id == "multiple_hidden_links":
+        return f"Plusieurs attributs communs ({shared_attributes or 'non renseignés'}) relient les entités et renforcent le soupçon de lien non déclaré."
+    if scenario_id == "ghost_supplier":
+        return f"Le fournisseur présente un signal de fournisseur fantôme avec boîte postale, descriptions vagues et {transaction_count or 0} transaction(s) sous les seuils attendus."
+    if scenario_id == "shell_entity":
+        return "Le bénéficiaire effectif du fournisseur correspond à un employé, ce qui peut signaler une société écran ou un contrôle caché."
+    if scenario_id == "bribes_gifts":
+        return f"Un cadeau ou avantage de {evidence.get('montant_cadeau', 'montant non renseigné')} est déclaré {evidence.get('gift_delay_days', 'N/A')} jour(s) avant une transaction."
+    if scenario_id == "star_pattern":
+        return f"Un employé pivot est relié à {evidence.get('supplier_count', 'plusieurs')} fournisseur(s), avec {transaction_count or 0} transaction(s) et des attributs communs."
+    if scenario_id == "circular_network":
+        return f"Plusieurs fournisseurs forment une boucle via des liens partagés ({link_types or 'attributs communs'}), ce qui peut masquer une circulation indirecte."
+    if scenario_id == "financial_concentration":
+        return f"Un volume financier important est concentré sur le même couple employé/fournisseur : {evidence.get('total_amount', 'montant non renseigné')} au total."
+    if scenario_id == "internal_network":
+        return f"Des employés rattachés au manager {evidence.get('manager_id', 'non renseigné')} partagent des attributs avec des fournisseurs, ce qui suggère un réseau interne à investiguer."
+    return scenario
+
+
+def _value_suffix(value: object) -> str:
+    if value in (None, ""):
+        return ""
+    return f" ({value})"
 
 
 def _format_evidence_value(value: object) -> str:
@@ -338,8 +482,20 @@ def _employee_entities(alert: dict) -> list[dict]:
     return [entity for entity in alert.get("entities", []) if _entity_id(entity).startswith("EMP")]
 
 
+def _supplier_entities(alert: dict) -> list[dict]:
+    return [entity for entity in alert.get("entities", []) if _entity_id(entity).startswith("FOU")]
+
+
 def _entity_id(entity: dict) -> str:
     return str(entity.get("id", ""))
+
+
+def _employee_label(entity: dict) -> str:
+    employee_id = _entity_id(entity)
+    label = str(entity.get("label") or "").strip()
+    if label:
+        return f"{employee_id} - {label}"
+    return employee_id
 
 
 def _supplier_label(entity: dict) -> str:
@@ -348,6 +504,28 @@ def _supplier_label(entity: dict) -> str:
     if label:
         return f"{supplier_id} - {label}"
     return supplier_id
+
+
+def _employee_links(employees: list[str], base_path: str) -> str:
+    return _entity_links(employees, base_path, "EMP")
+
+
+def _supplier_links(suppliers: list[str], base_path: str) -> str:
+    return _entity_links(suppliers, base_path, "FOU")
+
+
+def _entity_links(labels: list[str], base_path: str, prefix: str) -> str:
+    links = []
+    for label in labels:
+        clean_label = str(label).strip()
+        if not clean_label:
+            continue
+        entity_id = clean_label.split(" - ", 1)[0]
+        if entity_id.startswith(prefix):
+            links.append(f'<a href="{escape(base_path)}/{escape(entity_id)}.html">{escape(clean_label)}</a>')
+        else:
+            links.append(escape(clean_label))
+    return ", ".join(links)
 
 
 def _scenario_name(scenario_id: object) -> str:
@@ -368,6 +546,22 @@ def _entities(alert: dict) -> str:
         f"{entity.get('type', '')}:{entity.get('id', '')} {entity.get('label', '')}".strip()
         for entity in alert.get("entities", [])
     )
+
+
+def _entities_html(alert: dict, link_prefix: str = "") -> str:
+    labels = []
+    for entity in alert.get("entities", []):
+        entity_id = _entity_id(entity)
+        entity_type = str(entity.get("type", "")).strip()
+        label = str(entity.get("label", "")).strip()
+        text = f"{entity_type}:{entity_id} {label}".strip()
+        if entity_id.startswith("EMP"):
+            labels.append(f'<a href="{escape(link_prefix)}employees/{escape(entity_id)}.html">{escape(text)}</a>')
+        elif entity_id.startswith("FOU"):
+            labels.append(f'<a href="{escape(link_prefix)}suppliers/{escape(entity_id)}.html">{escape(text)}</a>')
+        else:
+            labels.append(escape(text))
+    return " | ".join(labels)
 
 
 def _source_rows(alert: dict) -> str:
