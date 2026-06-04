@@ -121,7 +121,7 @@ MULTIPLE_HIDDEN_LINKS_QUERY = """
         collect(DISTINCT replace(type(employeeRel), 'A_', '')) AS shared_attributes,
         collect(DISTINCT attribute.value) AS shared_values
     WHERE size(shared_attributes) >= 3
-    OPTIONAL MATCH (e)-[:A_EFFECTUE]->(t:Transaction)-[:VERS]->(f)
+    MATCH (e)-[:A_EFFECTUE]->(t:Transaction)-[:VERS]->(f)
     WITH e, f, shared_attributes, shared_values, count(DISTINCT t) AS transaction_count, collect(DISTINCT t.id_transaction)[0..10] AS source_rows
     WHERE transaction_count > 0
     RETURN
@@ -215,7 +215,7 @@ BRIBES_GIFTS_QUERY = """
 SHELL_ENTITY_QUERY = """
     MATCH (e:Employe), (f:Fournisseur)
     WHERE toUpper(toString(f.beneficiaire_effectif)) = toUpper(coalesce(e.prenom, '') + ' ' + coalesce(e.nom, ''))
-    OPTIONAL MATCH (e)-[:A_EFFECTUE]->(t:Transaction)-[:VERS]->(f)
+    MATCH (e)-[:A_EFFECTUE]->(t:Transaction)-[:VERS]->(f)
     WITH e, f, count(DISTINCT t) AS transaction_count, collect(DISTINCT t.id_transaction)[0..10] AS source_rows
     RETURN
         [

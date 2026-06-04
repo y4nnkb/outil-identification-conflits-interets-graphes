@@ -158,6 +158,7 @@ Résultats générés :
 - `output/alerts_by_employee.json`
 - `output/report.html`
 - `output/scenarios.html`
+- `output/employees/`
 - `output/evaluation.json`
 
 `evaluation.json` n'est produit que si `data/generated/scenario_labels.csv` existe.
@@ -405,10 +406,16 @@ Il contient :
 
 - les volumes d'alertes par gravité ;
 - les employés à investiguer en priorité ;
-- le top des alertes avec scénario, score, gravité, entités, lignes sources et preuves ;
+- le top des alertes avec scénario, score, gravité, entités, lignes sources, explication et preuves ;
 - une vue agrégée qui évite de présenter dix alertes séparées sans expliquer qu'elles concernent le même employé.
+- des filtres par recherche, gravité et scénario ;
+- un tri interactif des colonnes ;
+- des boutons pour afficher progressivement plus de lignes ;
+- un lien sur chaque employé vers une page dédiée listant toutes ses alertes.
 
 Le lien `Voir la documentation des scénarios` ouvre `output/scenarios.html`, une page générée depuis le catalogue des scénarios. Elle donne le nom métier, l'identifiant technique, la définition métier et les données utilisées pour chaque scénario.
+
+Les pages `output/employees/<id_employe>.html` détaillent toutes les alertes d'un employé, les fournisseurs concernés, les preuves et la raison de remontée de chaque alerte.
 
 Les exports `alerts_by_employee.csv` et `alerts_by_employee.json` permettent de retravailler cette agrégation dans Excel, Power BI ou un autre outil.
 
@@ -488,10 +495,12 @@ Déroulé conseillé :
 1. Ouvrir `output/report.html`.
 2. Présenter les indicateurs globaux du haut du rapport.
 3. Montrer le tableau des employés à investiguer en priorité.
-4. Expliquer que chaque ligne agrège plusieurs alertes autour du même employé et liste les fournisseurs concernés.
-5. Montrer le top des alertes prioritaires avec score, gravité, entités, lignes sources et preuves.
-6. Ouvrir `output/alerts_by_employee.csv` si le client veut une vue exportable.
-7. Finir par `output/evaluation.json` pour expliquer la performance sur données synthétiques.
+4. Cliquer sur un employé pour ouvrir sa page dédiée.
+5. Expliquer que chaque ligne agrège plusieurs alertes autour du même employé et liste les fournisseurs concernés.
+6. Utiliser les filtres du rapport pour isoler une gravité ou un scénario.
+7. Montrer le top des alertes prioritaires avec score, gravité, entités, lignes sources, explication et preuves.
+8. Ouvrir `output/alerts_by_employee.csv` si le client veut une vue exportable.
+9. Finir par `output/evaluation.json` pour expliquer la performance sur données synthétiques.
 
 Pendant la démo, ne pas présenter `ScenarioCase` comme une aide à la détection. Ces noeuds servent uniquement sur les données synthétiques pour vérifier que les règles retrouvent bien les scénarios injectés. Sur une base client réelle, ils n'existent pas.
 

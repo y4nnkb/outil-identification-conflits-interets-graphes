@@ -1,3 +1,4 @@
+from conflict_detector.reporting.exporters import export_report_bundle
 from conflict_detector.reporting.html_report import (
     aggregate_alerts_by_employee,
     render_html_report,
@@ -30,6 +31,7 @@ def test_aggregate_alerts_by_employee_groups_scores_and_scenarios() -> None:
     rows = aggregate_alerts_by_employee(alerts)
 
     assert rows[0]["employee_id"] == "EMP001"
+    assert rows[0]["employee_page"] == "employees/EMP001.html"
     assert rows[0]["alert_count"] == 2
     assert rows[0]["max_score"] == 18
     assert rows[0]["average_score"] == 14
@@ -41,14 +43,14 @@ def test_aggregate_alerts_by_employee_groups_scores_and_scenarios() -> None:
     assert "FOU002 - Beta" in rows[0]["suppliers"]
 
 
-def test_render_html_report_writes_top_alerts(tmp_path) -> None:
+def test_render_html_report_writes_interactive_alerts(tmp_path) -> None:
     alerts = [
         {
             "scenario_id": "identity_match",
             "score": 18,
             "severity": "HIGH",
             "entities": [{"id": "EMP001", "type": "Employe", "label": "Alice Martin"}],
-            "evidence": {"attribute": "iban"},
+            "evidence": {"attribute": "iban", "transaction_count": 2},
             "source_rows": ["TRX001"],
         }
     ]
@@ -61,8 +63,11 @@ def test_render_html_report_writes_top_alerts(tmp_path) -> None:
     assert "Correspondance d&#x27;identités (identity_match)" in html
     assert "Voir la documentation des scénarios" in html
     assert "Attribut commun" in html
-    assert "iban" in html
-    assert "EMP001" in html
+    assert "Pourquoi l'alerte ?" in html
+    assert "Voir les preuves" in html
+    assert "employees/EMP001.html" in html
+    assert "data-search-input" in html
+    assert "data-sortable" in html
 
 
 def test_render_html_report_can_reveal_more_rows(tmp_path) -> None:
@@ -101,3 +106,28 @@ def test_render_scenario_documentation_writes_business_definitions(tmp_path) -> 
     assert "Fournisseur fantôme" in html
     assert "ghost_supplier" in html
     assert "Définition métier" in html
+
+
+def test_export_report_bundle_writes_employee_detail_pages(tmp_path) -> None:
+    alerts = [
+        {
+            "scenario_id": "identity_match",
+            "score": 18,
+            "severity": "HIGH",
+            "entities": [
+                {"id": "EMP001", "type": "Employe", "label": "Alice Martin"},
+                {"id": "FOU001", "type": "Fournisseur", "label": "Alpha"},
+            ],
+            "evidence": {"attribute": "iban", "transaction_count": 1},
+            "source_rows": ["TRX001"],
+        }
+    ]
+
+    export_report_bundle(alerts, tmp_path, {"reporting": {"top_alerts": 1, "top_employees": 1}})
+
+    detail = tmp_path / "employees" / "EMP001.html"
+    assert detail.exists()
+    html = detail.read_text(encoding="utf-8")
+    assert "Alice Martin" in html
+    assert "Alpha" in html
+    assert "Retour au rapport principal" in html
