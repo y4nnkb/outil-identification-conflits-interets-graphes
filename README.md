@@ -117,6 +117,8 @@ user: neo4j
 password: password123
 ```
 
+Pour tout usage hors environnement local, modifier ces identifiants dans `.env`.
+
 Arrêter Neo4j :
 
 ```powershell
@@ -392,7 +394,7 @@ L'évaluation compare les alertes détectées avec `scenario_labels.csv`.
 - rappel : part des scénarios injectés retrouvés par les règles.
 - F1-score : moyenne équilibrée entre précision et rappel.
 
-Cette évaluation est utile sur les données synthétiques uniquement. Sur une base client, `scenario_labels.csv` n'existe pas et ne doit pas être utilisé.
+Cette évaluation est utile sur les données synthétiques uniquement. Sur des données réelles, les labels de scénarios injectés n'existent pas et ne sont pas utilisés par la détection.
 
 ## Rapport HTML
 
@@ -463,11 +465,9 @@ Pour afficher des noms lisibles dans le graphe :
 
 Le style force l'affichage de `display_label`, par exemple `EMP0001 - Lucie Marie` ou `TRX00042 - FACTURE`.
 
-## Démo Client
+## Exécution Locale
 
-Préparation avant la démonstration :
-
-Ouvrir Docker Desktop et attendre que l'engine soit démarré, puis lancer :
+Préparer l'environnement :
 
 ```powershell
 Copy-Item .env.example .env
@@ -475,52 +475,63 @@ docker compose up -d neo4j
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
-conflict-detector run --data data/generated --output output --reset
 ```
 
-Si les CSV n'existent pas encore :
+Générer un jeu de données synthétique :
 
 ```powershell
 conflict-detector generate --config configs/generation.yml
+```
+
+Exécuter le pipeline complet :
+
+```powershell
 conflict-detector run --data data/generated --output output --reset
 ```
 
-Ouvrir ensuite le rapport HTML :
+Ouvrir ensuite les rapports HTML :
 
 ```text
+output/executive_summary.html
 output/report.html
 ```
 
-Neo4j Browser reste disponible pour explorer ponctuellement un cas :
+Neo4j Browser reste disponible pour explorer ponctuellement le graphe :
 
 ```text
 http://localhost:7474
 ```
 
-Identifiants par défaut :
+Identifiants par défaut en environnement local :
 
 ```text
 user: neo4j
 password: password123
 ```
 
-Déroulé conseillé :
+Parcours conseillé du rapport :
 
 1. Ouvrir `output/executive_summary.html`.
-2. Présenter les volumes, les employés prioritaires et les fournisseurs les plus cités.
-3. Ouvrir `output/report.html` pour passer au détail.
-4. Montrer le tableau des employés à investiguer en priorité.
-5. Cliquer sur un employé pour ouvrir sa page dédiée.
-6. Cliquer sur un fournisseur pour ouvrir sa page dédiée.
-7. Expliquer que chaque ligne agrège plusieurs alertes autour du même employé ou fournisseur et liste les entités concernées.
-8. Utiliser les filtres du rapport pour isoler une gravité ou un scénario.
-9. Montrer le top des alertes prioritaires avec score, gravité, entités, lignes sources, explication métier et preuves.
-10. Ouvrir `output/alerts_by_employee.csv` si le client veut une vue exportable.
-11. Finir par `output/evaluation.json` pour expliquer la performance sur données synthétiques.
+2. Consulter les volumes, les employés prioritaires et les fournisseurs les plus cités.
+3. Ouvrir `output/report.html` pour accéder au détail.
+4. Utiliser les filtres du rapport pour isoler une gravité ou un scénario.
+5. Ouvrir une page employé ou fournisseur pour consulter les alertes associées.
+6. Consulter les preuves et l'explication métier de chaque alerte.
+7. Utiliser les exports CSV/JSON si une analyse externe est nécessaire.
 
-Pendant la démo, ne pas présenter `ScenarioCase` comme une aide à la détection. Ces noeuds servent uniquement sur les données synthétiques pour vérifier que les règles retrouvent bien les scénarios injectés. Sur une base client réelle, ils n'existent pas.
+## Lecture Des Résultats
 
-Message métier à faire passer :
+Les sorties produites par le pipeline permettent plusieurs niveaux d'analyse :
+
+- `executive_summary.html` : vue courte pour prioriser les investigations ;
+- `report.html` : tableau détaillé des alertes, filtres, tri et liens vers les pages dédiées ;
+- `employees/` : pages détaillées par employé ;
+- `suppliers/` : pages détaillées par fournisseur ;
+- `alerts.csv` et `alerts.json` : exports complets des alertes ;
+- `alerts_by_employee.csv` et `alerts_by_employee.json` : agrégation des alertes par employé ;
+- `evaluation.json` : métriques d'évaluation disponibles uniquement sur données synthétiques.
+
+Principes de lecture :
 
 - les données de départ sont classiques : employés, fournisseurs, transactions ;
 - le graphe révèle les liens faibles qui sont difficiles à voir en tableau ;
@@ -537,9 +548,9 @@ python -m compileall src scripts tests
 
 Les tests couvrent la génération, le bruit, la normalisation, le chargement Neo4j, les contrats des règles, le scoring, l'évaluation et un pipeline de bout en bout sur petit dataset.
 
-## État Actuel
+## État Du Projet
 
-Présent :
+Le projet contient actuellement :
 
 - génération synthétique complète ;
 - injection de scénarios ;
@@ -553,11 +564,3 @@ Présent :
 - évaluation synthétique ;
 - style et requêtes de visualisation Neo4j Browser ;
 - tests automatisés.
-
-Sur la configuration par défaut, l'évaluation synthétique retrouve actuellement environ 98 % des scénarios injectés. Les écarts restants concernent surtout les scénarios où plusieurs motifs peuvent se recouvrir naturellement dans le graphe.
-
-À améliorer ensuite :
-
-- précision des règles sur les scénarios très larges ;
-- visualisation finale des alertes ;
-- ergonomie d'analyse par score, scénario et gravité.
